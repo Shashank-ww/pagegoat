@@ -72,4 +72,5 @@ target_link_libraries(pagegoat-service PRIVATE CURL::libcurl)
 
 if(WIN32)
     target_link_libraries(pagegoat-service PRIVATE ws2_32)
+    target_link_libraries(pagegoat PRIVATE ws2_32)
 endif()

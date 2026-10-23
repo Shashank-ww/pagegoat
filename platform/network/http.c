@@ -5,15 +5,154 @@
 
 #include <curl/curl.h>
 
+#define PG_HTTP_MAX_RESPONSE_BYTES (10U * 1024U * 1024U)
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
 
 typedef struct
 {
     char *data;
     size_t size;
 } Buffer;
+
+
+/*----------------------------------------------------------*/
+/* SSRF protection: reject non-public destination addresses  */
+/*----------------------------------------------------------*/
+
+static int is_forbidden_ipv4(const unsigned char *ip)
+{
+    unsigned int a = ip[0];
+    unsigned int b = ip[1];
+
+    if (a == 0 || a == 10 || a == 127 || a >= 224)
+        return 1;
+
+    if (a == 100 && b >= 64 && b <= 127)
+        return 1;
+
+    if (a == 169 && b == 254)
+        return 1;
+
+    if (a == 172 && b >= 16 && b <= 31)
+        return 1;
+
+    if (a == 192 && b == 168)
+        return 1;
+
+    if (a == 192 && b == 0 && ip[2] == 0)
+        return 1;
+
+    if (a == 192 && b == 0 && ip[2] == 2)
+        return 1;
+
+    if (a == 192 && b == 88 && ip[2] == 99)
+        return 1;
+
+    if (a == 198 && (b == 18 || b == 19))
+        return 1;
+
+    if (a == 198 && b == 51 && ip[2] == 100)
+        return 1;
+
+    if (a == 203 && b == 0 && ip[2] == 113)
+        return 1;
+
+    return 0;
+}
+
+static int is_forbidden_ip(const char *address)
+{
+    if (address == NULL || address[0] == '\0')
+        return 1;
+
+    struct in_addr ipv4;
+
+#ifdef _WIN32
+    if (InetPtonA(AF_INET, address, &ipv4) == 1)
+#else
+    if (inet_pton(AF_INET, address, &ipv4) == 1)
+#endif
+    {
+        const unsigned char *ip =
+            (const unsigned char *)&ipv4;
+
+        return is_forbidden_ipv4(ip);
+    }
+
+    struct in6_addr ipv6;
+
+#ifdef _WIN32
+    if (InetPtonA(AF_INET6, address, &ipv6) != 1)
+#else
+    if (inet_pton(AF_INET6, address, &ipv6) != 1)
+#endif
+    {
+        /* Fail closed if the IP cannot be parsed. */
+        return 1;
+    }
+
+    const unsigned char *ip = ipv6.s6_addr;
+
+    /* IPv6 unspecified and loopback. */
+    static const unsigned char zero[16] = {0};
+
+    if (memcmp(ip, zero, 16) == 0)
+        return 1;
+
+    if (memcmp(ip, zero, 15) == 0 && ip[15] == 1)
+        return 1;
+
+    /* IPv6 unique-local, link-local and multicast. */
+    if ((ip[0] & 0xFE) == 0xFC)
+        return 1;
+
+    if (ip[0] == 0xFE && (ip[1] & 0xC0) == 0x80)
+        return 1;
+
+    if (ip[0] == 0xFF)
+        return 1;
+
+    /* IPv4-mapped IPv6: ::ffff:a.b.c.d */
+    if (memcmp(ip, zero, 10) == 0 &&
+        ip[10] == 0xFF && ip[11] == 0xFF)
+    {
+        return is_forbidden_ipv4(ip + 12);
+    }
+
+    return 0;
+}
+
+static int prereq_callback(
+    void *clientp,
+    char *conn_primary_ip,
+    char *conn_local_ip,
+    int conn_primary_port,
+    int conn_local_port)
+{
+    (void)clientp;
+    (void)conn_local_ip;
+    (void)conn_local_port;
+
+    if (is_forbidden_ip(conn_primary_ip))
+    {
+        pg_log_error(
+            "Blocked HTTP connection to a non-public IP address.");
+        return CURL_PREREQFUNC_ABORT;
+    }
+
+    return CURL_PREREQFUNC_OK;
+}
 
 
 /*----------------------------------------------------------*/
@@ -34,6 +173,11 @@ static size_t write_callback(
 
     size_t total = size * nmemb;
     Buffer *buffer = (Buffer *)userp;
+
+    /* Reject responses larger than 10 MiB. */
+    if (buffer->size > PG_HTTP_MAX_RESPONSE_BYTES ||
+        total > PG_HTTP_MAX_RESPONSE_BYTES - buffer->size)
+        return 0;
 
     if (total > SIZE_MAX - buffer->size - 1)
         return 0;
@@ -57,6 +201,7 @@ static size_t write_callback(
 
     return total;
 }
+
 
 
 /*----------------------------------------------------------*/
@@ -140,8 +285,24 @@ int pg_http_get(
     } while (0)
 
     PG_CURL_SETOPT(CURLOPT_URL, url);
+
+    /* Do not allow environment-configured proxies to bypass
+    * destination IP checks. */
+    PG_CURL_SETOPT(CURLOPT_PROXY, "");
+
+    /* Only permit HTTP and HTTPS requests and redirects. */
+    PG_CURL_SETOPT(
+        CURLOPT_PROTOCOLS,
+        CURLPROTO_HTTP | CURLPROTO_HTTPS);
+
     PG_CURL_SETOPT(CURLOPT_FOLLOWLOCATION, 1L);
+
+    PG_CURL_SETOPT(
+        CURLOPT_REDIR_PROTOCOLS,
+        CURLPROTO_HTTP | CURLPROTO_HTTPS);
+
     PG_CURL_SETOPT(CURLOPT_MAXREDIRS, 10L);
+
     PG_CURL_SETOPT(CURLOPT_ACCEPT_ENCODING, "");
     PG_CURL_SETOPT(CURLOPT_TIMEOUT, 30L);
     PG_CURL_SETOPT(CURLOPT_CONNECTTIMEOUT, 10L);
@@ -153,6 +314,14 @@ int pg_http_get(
     PG_CURL_SETOPT(CURLOPT_WRITEFUNCTION, write_callback);
     PG_CURL_SETOPT(CURLOPT_WRITEDATA, &buffer);
     PG_CURL_SETOPT(CURLOPT_NOSIGNAL, 1L);
+
+    PG_CURL_SETOPT(
+    CURLOPT_PREREQFUNCTION,
+    prereq_callback);
+
+    PG_CURL_SETOPT(
+    CURLOPT_PREREQDATA,
+    NULL);
 
     if (headers == NULL)
     {
