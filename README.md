@@ -115,3 +115,31 @@ Do not run `cmake --build build` from inside the build directory, because that l
 ## Development Principle
 
 Stabilize and test the C engine before building the frontend. Keep discovery, downloading, parsing, extraction, and exporting as separate components.
+
+### START DEV
+
+PS D:\Work\NewYou\pagegoat> cmake --build build
+
+PS D:\Work\NewYou\pagegoat> .\build\pagegoat.exe       
+
+PS D:\Work\NewYou\pagegoat> .\build\pagegoat-service.exe   
+
+This should open - 
+[INFO] HTTP initialized.
+PageGoat service listening at http://127.0.0.1:8787
+Endpoint: POST http://127.0.0.1:8787/extract
+
+Then in next terminal (new)
+
+PS D:\Work\NewYou\pagegoat> cd .\apps\web
+PS D:\Work\NewYou\pagegoat\apps\web> npm run dev
+
+> web@0.1.0 dev
+> next dev
+
+▲ Next.js 16.4.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.220:3000
+- Environments: .env.local
+✓ Ready in 6.7s
+✓ Running next.config.ts took 424ms

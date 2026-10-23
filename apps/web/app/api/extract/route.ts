@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -9,46 +8,102 @@ export async function POST(request: Request) {
 
   if (!engineUrl) {
     return NextResponse.json(
-      { error: "The PageGoat extraction service is not configured yet." },
+      {
+        error:
+          "The PageGoat extraction service is not configured yet.",
+      },
       { status: 503 }
     );
   }
 
+  const startedAt = Date.now();
+
   try {
     const body = await request.json();
-    const url = body?.url;
+    const rawUrl = body?.url;
 
-    if (typeof url !== "string" || !url.trim() || url.length > 2048) {
+    if (
+      typeof rawUrl !== "string" ||
+      !rawUrl.trim() ||
+      rawUrl.length > 2048
+    ) {
       return NextResponse.json(
-        { error: "Please enter a valid website URL." },
+        {
+          error: "Please enter a valid website URL.",
+        },
         { status: 400 }
       );
     }
 
-    const response = await fetch(`${engineUrl.replace(/\/$/, "")}/extract`, {
+    const url = rawUrl.trim();
+
+    const endpoint = `${engineUrl.replace(/\/$/, "")}/extract`;
+
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url.trim() }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url }),
       signal: AbortSignal.timeout(85_000),
       cache: "no-store",
     });
 
-    const result = await response.json();
+    let result: Record<string, unknown>;
 
-    if (!response.ok) {
+    try {
+      result = await response.json();
+    } catch {
       return NextResponse.json(
-        { error: result.error || "Website extraction failed." },
-        { status: response.status >= 400 && response.status < 600
-          ? response.status
-          : 502 }
+        {
+          error: "The extraction service returned an invalid response.",
+        },
+        { status: 502 }
       );
     }
 
-    return NextResponse.json(result, { status: 200 });
-  } catch {
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error:
+            typeof result.error === "string"
+              ? result.error
+              : "Website extraction failed.",
+        },
+        {
+          status:
+            response.status >= 400 && response.status < 600
+              ? response.status
+              : 502,
+        }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Could not reach the PageGoat extraction service." },
-      { status: 502 }
+      {
+        ...result,
+        engine: {
+          ...(typeof result.engine === "object" &&
+          result.engine !== null
+            ? result.engine
+            : {}),
+          elapsed_ms: Date.now() - startedAt,
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    const timedOut =
+      error instanceof DOMException &&
+      error.name === "TimeoutError";
+
+    return NextResponse.json(
+      {
+        error: timedOut
+          ? "The extraction service took too long to respond."
+          : "Could not reach the PageGoat extraction service.",
+      },
+      { status: timedOut ? 504 : 502 }
     );
   }
 }
