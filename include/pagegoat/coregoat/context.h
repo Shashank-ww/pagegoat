@@ -1,39 +1,30 @@
 #ifndef PAGEGOAT_CONTEXT_H
 #define PAGEGOAT_CONTEXT_H
 
-#include <stddef.h>
-
+#include "pagegoat/platform/http.h"
+#include "pagegoat/coregoat/company.h"
 #include "pagegoat/coregoat/status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define PG_MAX_QUERY_LENGTH 512
-#define PG_MAX_URL_LENGTH   2048
-
-typedef struct PGContext
+typedef struct
 {
-    char search_query[PG_MAX_QUERY_LENGTH];
+    char url[512];
 
-    char current_url[PG_MAX_URL_LENGTH];
+    PGHttpResponse response;
 
-    unsigned int companies_found;
-
-    unsigned int companies_processed;
-
-    unsigned int current_company;
+    PGCompany company;
 
 } PGContext;
 
-PGStatus pg_context_init(PGContext *ctx);
+PGStatus
+pg_context_init(
+    PGContext *ctx);
 
-PGStatus pg_context_reset(PGContext *ctx);
+PGStatus
+pg_context_reset(
+    PGContext *ctx);
 
-PGStatus pg_context_destroy(PGContext *ctx);
-
-#ifdef __cplusplus
-}
-#endif
+PGStatus
+pg_context_destroy(
+    PGContext *ctx);
 
 #endif

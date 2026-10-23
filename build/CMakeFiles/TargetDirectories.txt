@@ -1,0 +1,4 @@
+D:/Work/NewYou/pagegoat/build/CMakeFiles/pagegoat.dir
+D:/Work/NewYou/pagegoat/build/CMakeFiles/pagegoat-service.dir
+D:/Work/NewYou/pagegoat/build/CMakeFiles/edit_cache.dir
+D:/Work/NewYou/pagegoat/build/CMakeFiles/rebuild_cache.dir

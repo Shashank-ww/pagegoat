@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "website": "https://www.apple.com",
+  "company": {
+    "name": "Apple",
+    "title": "Apple",
+    "description": null,
+    "keywords": null,
+    "language": "en-US",
+    "canonical_url": "https://www.apple.com/",
+    "contact": {
+      "emails": [],
+      "phones": ["18006927753"]
+    },
+    "social": {
+      "linkedin": null,
+      "facebook": null,
+      "instagram": null,
+      "twitter": null,
+      "youtube": null,
+      "github": null,
+      "tiktok": null,
+      "pinterest": null
+    },
+    "branding": {
+      "logo_url": "https://www.apple.com/ac/structured-data/images/open_graph_logo.png?202610011401",
+      "favicon_url": null,
+      "apple_icon_url": null,
+      "apple_touch_icon_url": null,
+      "theme_color": null
+    },
+    "seo": {
+      "generator": null,
+      "robots": null,
+      "sitemap": null
+    },
+    "organization": {
+      "legal_name": null,
+      "founded": null,
+      "copyright": null
+    }
+  }
+}
