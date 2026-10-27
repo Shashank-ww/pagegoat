@@ -1,109 +1,103 @@
+
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 90;
+export const dynamic = "force-dynamic";
+
+const ENGINE_URL =
+  process.env.PAGEGOAT_ENGINE_URL?.trim() ||
+  "http://127.0.0.1:8787";
 
 export async function POST(request: Request) {
-  const engineUrl = process.env.PAGEGOAT_ENGINE_URL;
+  let body: unknown;
 
-  if (!engineUrl) {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json(
-      {
-        error:
-          "The PageGoat extraction service is not configured yet.",
-      },
-      { status: 503 }
+      { error: "Request body must be valid JSON." },
+      { status: 400 },
     );
   }
 
-  const startedAt = Date.now();
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json(
+      { error: "A JSON object containing a company URL is required." },
+      { status: 400 },
+    );
+  }
+
+  const url = (body as { url?: unknown }).url;
+
+  if (typeof url !== "string" || !url.trim() || url.trim().length > 2048) {
+    return NextResponse.json(
+      { error: "Enter a company website or domain." },
+      { status: 400 },
+    );
+  }
 
   try {
-    const body = await request.json();
-    const rawUrl = body?.url;
-
-    if (
-      typeof rawUrl !== "string" ||
-      !rawUrl.trim() ||
-      rawUrl.length > 2048
-    ) {
-      return NextResponse.json(
-        {
-          error: "Please enter a valid website URL.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const url = rawUrl.trim();
-
-    const endpoint = `${engineUrl.replace(/\/$/, "")}/extract`;
-
-    const response = await fetch(endpoint, {
+    const upstream = await fetch(`${ENGINE_URL.replace(/\/+$/, "")}/extract`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify({ url }),
-      signal: AbortSignal.timeout(85_000),
+      body: JSON.stringify({ url: url.trim() }),
       cache: "no-store",
+      signal: AbortSignal.timeout(120_000),
     });
 
-    let result: Record<string, unknown>;
+    const raw = await upstream.text();
+
+    let payload: unknown;
 
     try {
-      result = await response.json();
+      payload = JSON.parse(raw);
     } catch {
       return NextResponse.json(
         {
-          error: "The extraction service returned an invalid response.",
+          error: "The extraction engine returned an invalid JSON response.",
+          upstreamStatus: upstream.status,
         },
-        { status: 502 }
+        { status: 502 },
       );
     }
 
-    if (!response.ok) {
+    if (!upstream.ok) {
+      const upstreamPayload =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>)
+          : {};
+
       return NextResponse.json(
         {
           error:
-            typeof result.error === "string"
-              ? result.error
-              : "Website extraction failed.",
+            typeof upstreamPayload.error === "string"
+              ? upstreamPayload.error
+              : `The extraction engine returned HTTP ${upstream.status}.`,
         },
-        {
-          status:
-            response.status >= 400 && response.status < 600
-              ? response.status
-              : 502,
-        }
+        { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 },
       );
     }
 
-    return NextResponse.json(
-      {
-        ...result,
-        engine: {
-          ...(typeof result.engine === "object" &&
-          result.engine !== null
-            ? result.engine
-            : {}),
-          elapsed_ms: Date.now() - startedAt,
-        },
-      },
-      { status: 200 }
-    );
+    // Pass the engine response through unchanged. Preserve nested company fields.
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown connection error.";
+
     const timedOut =
-      error instanceof DOMException &&
-      error.name === "TimeoutError";
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError");
 
     return NextResponse.json(
       {
         error: timedOut
-          ? "The extraction service took too long to respond."
-          : "Could not reach the PageGoat extraction service.",
+          ? "The extraction engine took too long to respond."
+          : `Could not connect to the extraction engine: ${message}`,
       },
-      { status: timedOut ? 504 : 502 }
+      { status: timedOut ? 504 : 502 },
     );
   }
 }

@@ -1,21 +1,20 @@
+
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
+import SiteFooter from "./components/SiteFooter";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "PageGoat — Company Intelligence Engine",
+  title: "Welookit - Company Discovery",
   description:
-    "Extract structured company intelligence from publicly accessible websites.",
+    "Find company websites, public contact details, social profiles, technology and website information.",
+  applicationName: "Welookit",
 };
 
 export default function RootLayout({
@@ -24,11 +23,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable}`}
-    >
-      <body>{children}</body>
+    <html lang="en">
+      <body className={inter.variable}>
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }
