@@ -10,52 +10,100 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+
     container:
       image: oraclelinux:9
 
     steps:
       - name: Install build dependencies
         run: |
-          dnf -y install gcc gcc-c++ cmake make openssl-devel zlib-devel pkgconf-pkg-config tar gzip git curl
+          dnf -y install \
+            gcc \
+            gcc-c++ \
+            cmake \
+            make \
+            openssl-devel \
+            zlib-devel \
+            pkgconf-pkg-config \
+            tar \
+            gzip \
+            git \
+            curl \
+            file \
+            binutils
           dnf clean all
 
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build compatible libcurl
+      - name: Build compatible static libcurl
         run: |
-          curl -fL https://curl.se/download/curl-8.12.1.tar.gz -o /tmp/curl.tar.gz
+          curl -fL --retry 3 \
+            https://curl.se/download/curl-8.12.1.tar.gz \
+            -o /tmp/curl.tar.gz
+
           tar -xzf /tmp/curl.tar.gz -C /tmp
           cd /tmp/curl-8.12.1
-          ./configure --prefix=/opt/pagegoat-curl --with-openssl --with-zlib --disable-shared --enable-static --without-libpsl --without-brotli --without-zstd --without-nghttp2
+
+          ./configure \
+            --prefix=/opt/pagegoat-curl \
+            --with-openssl \
+            --with-zlib \
+            --disable-shared \
+            --enable-static \
+            --without-libpsl \
+            --without-brotli \
+            --without-zstd \
+            --without-nghttp2
+
           make -j2
           make install
 
+      - name: Verify custom libcurl
+        run: |
+          test -f /opt/pagegoat-curl/include/curl/curl.h
+          test -f /opt/pagegoat-curl/lib/libcurl.a
+
+          /opt/pagegoat-curl/bin/curl-config --version
+          /opt/pagegoat-curl/bin/curl-config --static-libs
+
       - name: Configure CMake
         run: |
-          export PKG_CONFIG_PATH=/opt/pagegoat-curl/lib/pkgconfig
-          pkg-config --modversion libcurl
           cmake -S . -B build-linux \
             -DCMAKE_BUILD_TYPE=Release \
             -DCURL_INCLUDE_DIR=/opt/pagegoat-curl/include \
-            -DCURL_LIBRARY=/opt/pagegoat-curl/lib/libcurl.a
+            -DCURL_LIBRARY=/opt/pagegoat-curl/lib/libcurl.a \
+            "-DCMAKE_C_STANDARD_LIBRARIES=-lssl -lcrypto -lz -ldl -pthread"
 
       - name: Build existing targets
         run: |
-          cmake --build build-linux --parallel 2
+          cmake --build build-linux --parallel 2 --verbose
 
       - name: Verify Linux binaries
         run: |
+          test -x build-linux/pagegoat
+          test -x build-linux/pagegoat-service
+
           file build-linux/pagegoat
           file build-linux/pagegoat-service
+
+          echo "--- Service runtime dependencies ---"
           ldd build-linux/pagegoat-service
-          ldd build-linux/pagegoat-service | grep "not found" && exit 1 || true
+
+          if ldd build-linux/pagegoat-service | grep -q "not found"; then
+            echo "ERROR: One or more runtime libraries are missing."
+            exit 1
+          fi
 
       - name: Package service binary
         run: |
           mkdir -p pagegoat-linux
           cp build-linux/pagegoat-service pagegoat-linux/
-          tar -czf pagegoat-linux.tar.gz -C pagegoat-linux .
+
+          tar -czf pagegoat-linux.tar.gz \
+            -C pagegoat-linux .
+
+          tar -tzf pagegoat-linux.tar.gz
 
       - name: Upload Linux build artifact
         uses: actions/upload-artifact@v4
