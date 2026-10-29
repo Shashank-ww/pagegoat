@@ -549,7 +549,7 @@ int main(void)
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(PG_SERVICE_PORT);
-    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(server, (struct sockaddr *)&address, sizeof(address)) ==
             PG_SOCKET_ERROR ||
