@@ -17,6 +17,7 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf -y install gcc gcc-c++ cmake make libcurl-devel pkgconf-pkg-config tar gzip
+          rpm -q libcurl libcurl-devel
           dnf clean all
 
       - name: Check out repository
