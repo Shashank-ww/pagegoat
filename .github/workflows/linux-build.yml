@@ -16,17 +16,29 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          dnf -y install gcc gcc-c++ cmake make libcurl-devel pkgconf-pkg-config tar gzip
-          rpm -q libcurl libcurl-devel
+          dnf -y install gcc gcc-c++ cmake make openssl-devel zlib-devel pkgconf-pkg-config tar gzip git curl
           dnf clean all
 
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Build compatible libcurl
+        run: |
+          curl -fL https://curl.se/download/curl-8.12.1.tar.gz -o /tmp/curl.tar.gz
+          tar -xzf /tmp/curl.tar.gz -C /tmp
+          cd /tmp/curl-8.12.1
+          ./configure --prefix=/opt/pagegoat-curl --with-openssl --with-zlib --disable-shared --enable-static --without-libpsl --without-brotli --without-zstd --without-nghttp2
+          make -j2
+          make install
+
       - name: Configure CMake
         run: |
+          export PKG_CONFIG_PATH=/opt/pagegoat-curl/lib/pkgconfig
+          pkg-config --modversion libcurl
           cmake -S . -B build-linux \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCURL_INCLUDE_DIR=/opt/pagegoat-curl/include \
+            -DCURL_LIBRARY=/opt/pagegoat-curl/lib/libcurl.a
 
       - name: Build existing targets
         run: |
