@@ -775,7 +775,10 @@ const elapsedLabel =
           <h3>Navigation</h3>
           <div className="drawer-links">
             <button type="button" onClick={goHome} tabIndex={sidebarOpen ? 0 : -1}><Home size={15} /> Homepage</button>
-            <a href="/about" tabIndex={sidebarOpen ? 0 : -1}>About</a><a href="/contact" tabIndex={sidebarOpen ? 0 : -1}>Contact</a><a href="/terms" tabIndex={sidebarOpen ? 0 : -1}>Terms</a>
+            <a href="/about" tabIndex={sidebarOpen ? 0 : -1}>About</a>
+            <a href="/engine" tabIndex={sidebarOpen ? 0 : -1}>Engine</a>
+            <a href="/contact" tabIndex={sidebarOpen ? 0 : -1}>Contact</a>
+            <a href="/terms" tabIndex={sidebarOpen ? 0 : -1}>Terms</a>
           </div>
         </section>
         <section className="drawer-section">

@@ -152,7 +152,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   width: 192px;
   height: 192px;
   object-fit: contain;
-  transform: translateY(-24px) translateX(-24px);
+  transform: translateY(-36px) translateX(-24px);
   z-index: 0;
 }
 .eyebrow {
