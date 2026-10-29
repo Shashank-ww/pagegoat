@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          dnf -y install gcc gcc-c++ cmake ninja-build make libcurl-devel pkgconf-pkg-config tar gzip
+          dnf -y install gcc gcc-c++ cmake make libcurl-devel pkgconf-pkg-config tar gzip
           dnf clean all
 
       - name: Check out repository
@@ -24,7 +24,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S . -B build-linux -G Ninja \
+          cmake -S . -B build-linux \
             -DCMAKE_BUILD_TYPE=Release
 
       - name: Build existing targets
