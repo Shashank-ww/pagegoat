@@ -1,0 +1,50 @@
+
+name: PageGoat Linux Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc g++ make libcurl4-openssl-dev pkg-config
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build-linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build existing targets
+        run: |
+          cmake --build build-linux --parallel 2
+
+      - name: Verify Linux binaries
+        run: |
+          file build-linux/pagegoat
+          file build-linux/pagegoat-service
+          ldd build-linux/pagegoat-service
+
+      - name: Package service binary
+        run: |
+          mkdir -p pagegoat-linux
+          cp build-linux/pagegoat-service pagegoat-linux/
+          tar -czf pagegoat-linux.tar.gz -C pagegoat-linux .
+
+      - name: Upload Linux build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pagegoat-linux
+          path: pagegoat-linux.tar.gz
+          if-no-files-found: error
+          retention-days: 7
