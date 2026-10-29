@@ -1,43 +1,58 @@
 {
   "schema_version": "1.0",
-  "website": "https://www.apple.com",
+  "website": "https://www.medtronic.com",
   "company": {
-    "name": "Apple",
-    "title": "Apple",
-    "description": null,
+    "name": "Home | Medtronic",
+    "title": "Home | Medtronic",
+    "description": "Medtronic is a global leader in medical technology, services, and solutions. We collaborate with others to take on healthcare's greatest challenges. See how.",
     "keywords": null,
-    "language": "en-US",
-    "canonical_url": "https://www.apple.com/",
+    "language": "en-IN",
+    "canonical_url": "https://www.medtronic.com/in-en/index.html",
+    "technology_stack": ["Google Analytics","Adobe Experience Cloud","Akamai","LinkedIn Insight Tag","Hotjar","Google Ads","Google Floodlight","Meta Pixel","Microsoft Advertising UET","X Ads Pixel","Salesforce","jQuery","Amazon CloudFront"],
     "contact": {
-      "emails": [],
-      "phones": ["18006927753"]
+      "emails": ["rs.indiaresponsecare@medtronic.com","rs.indiainsidesales@medtronic.com","rs.impl@medtronic.com","rs.isctechservice@medtronic.com","rs.indiacommunications@medtronic.com"],
+      "phones": []
     },
     "social": {
-      "linkedin": null,
-      "facebook": null,
-      "instagram": null,
+      "linkedin": "https://www.linkedin.com/company/medtronic",
+      "facebook": "https://www.facebook.com/IndiaMedtronic/",
+      "instagram": "https://www.instagram.com/medtronicindia/",
       "twitter": null,
-      "youtube": null,
+      "youtube": "https://www.youtube.com/channel/UCQ_VU9Y7F9PyjMMOtOolGDw",
       "github": null,
       "tiktok": null,
       "pinterest": null
     },
     "branding": {
-      "logo_url": "https://www.apple.com/ac/structured-data/images/open_graph_logo.png?202610011401",
-      "favicon_url": null,
-      "apple_icon_url": null,
-      "apple_touch_icon_url": null,
-      "theme_color": null
+      "logo_url": "https://www.medtronic.com/content/dam/medtronic-wide/public/channel-configuration/medtronic-com/open-graph-default.png",
+      "favicon_url": "https://www.medtronic.com/content/dam/medtronic-wide/public/channel-configuration/favicons/favicon-32x32.png",
+      "apple_icon_url": "https://www.medtronic.com/content/dam/medtronic-wide/public/channel-configuration/favicons/apple-touch-icon.png",
+      "apple_touch_icon_url": "https://www.medtronic.com/content/dam/medtronic-wide/public/channel-configuration/favicons/apple-touch-icon.png",
+      "theme_color": "#ffffff",
+      "font_families": ["Avenir Next World Bold","Avenir Next World Bold Italic","Noto Sans","Avenir Next World Demi"]
     },
     "seo": {
       "generator": null,
       "robots": null,
-      "sitemap": null
+      "sitemap": null,
+      "open_graph": {
+        "title": "Home",
+        "description": "Medtronic is a global leader in medical technology, services, and solutions. We collaborate with others to take on healthcare&#39;s greatest challenges. See how.",
+        "image_url": "https://www.medtronic.com/content/dam/medtronic-wide/public/channel-configuration/medtronic-com/open-graph-default.png",
+        "url": "https://www.medtronic.com/in-en/index.html"
+      },
+      "twitter_card": {
+        "card": null,
+        "title": null,
+        "description": null,
+        "image_url": null
+      }
     },
     "organization": {
       "legal_name": null,
       "founded": null,
       "copyright": null
-    }
+    },
+    "people": [    ]
   }
 }

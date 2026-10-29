@@ -1,4 +1,6 @@
+#include <stdio.h>
 #include <string.h>
+#include "pagegoat/platform/logger.h"
 
 #include "pagegoat/coregoat/context.h"
 
@@ -54,4 +56,32 @@ pg_context_destroy(PGContext *ctx)
     memset(ctx, 0, sizeof(PGContext));
 
     return PG_STATUS_OK;
+}
+void pg_context_emit_event(
+    PGContext *ctx,
+    const char *type,
+    const char *message,
+    const char *url)
+{
+    if (ctx == NULL || type == NULL || message == NULL)
+        return;
+
+    if (ctx->event_callback != NULL)
+    {
+        ctx->event_callback(ctx->event_user_data, type, message,
+                            url != NULL ? url : "");
+    }
+    else
+    {
+        if (url != NULL && url[0] != '\0')
+        {
+            char line[1400];
+            snprintf(line, sizeof(line), "%s [%s]", message, url);
+            pg_log_info(line);
+        }
+        else
+        {
+            pg_log_info(message);
+        }
+    }
 }

@@ -129,6 +129,15 @@ This should open -
 PageGoat service listening at http://127.0.0.1:8787
 Endpoint: POST http://127.0.0.1:8787/extract
 
+### HTTP extraction endpoints
+
+- `POST http://127.0.0.1:8787/extract` keeps the existing JSON response contract.
+- `POST http://127.0.0.1:8787/extract-stream` streams real engine events as Server-Sent Events (SSE), followed by a `result` event containing the same extraction JSON. Use `fetch()` with a readable response stream from the frontend because this endpoint uses POST; native `EventSource` only supports GET.
+
+Each `activity` event contains JSON fields `type`, `message`, and `url`. Events are emitted by actual engine operations, including homepage fetching, HTML parsing, candidate discovery, contact-page fetch/scan outcomes, metadata extraction, branding, technology detection, SEO extraction, and completion/failure. Contact-page messages include the actual URL, so repeated messages can be distinguished. The crawler now attempts no more than nine prioritized candidate pages per extraction.
+
+The `branding` object in the JSON response now includes `font_families` as an array. Font detection inspects homepage CSS and at most one linked stylesheet to limit additional requests. Font names are declarations detected in CSS; they are not a guarantee that each font successfully rendered.
+
 Then in next terminal (new)
 
 PS D:\Work\NewYou\pagegoat> cd .\apps\web

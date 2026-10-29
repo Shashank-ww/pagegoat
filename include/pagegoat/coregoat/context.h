@@ -5,6 +5,12 @@
 #include "pagegoat/coregoat/company.h"
 #include "pagegoat/coregoat/status.h"
 
+typedef void (*PGEventCallback)(
+    void *user_data,
+    const char *type,
+    const char *message,
+    const char *url);
+
 typedef struct
 {
     char url[512];
@@ -13,7 +19,16 @@ typedef struct
 
     PGCompany company;
 
+    PGEventCallback event_callback;
+    void *event_user_data;
+
 } PGContext;
+
+void pg_context_emit_event(
+    PGContext *ctx,
+    const char *type,
+    const char *message,
+    const char *url);
 
 PGStatus
 pg_context_init(

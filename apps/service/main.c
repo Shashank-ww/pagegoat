@@ -83,6 +83,121 @@ static void send_json(
 }
 
 
+
+static void send_sse_headers(PGSocket client)
+{
+    static const char headers[] =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/event-stream; charset=utf-8\r\n"
+        "Cache-Control: no-cache, no-transform\r\n"
+        "Connection: close\r\n"
+        "Access-Control-Allow-Origin: http://localhost:3000\r\n"
+        "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Headers: Content-Type\r\n"
+        "X-Accel-Buffering: no\r\n\r\n";
+    (void)send_all(client, headers, sizeof(headers) - 1);
+}
+
+static size_t json_escape(const char *input, char *output, size_t capacity)
+{
+    size_t used = 0;
+    if (capacity == 0) return 0;
+
+    for (const unsigned char *p = (const unsigned char *)(input ? input : "");
+         *p && used + 2 < capacity; p++)
+    {
+        const char *escape = NULL;
+        char unicode_escape[7];
+        switch (*p)
+        {
+            case '"': escape = "\\\""; break;
+            case '\\': escape = "\\\\"; break;
+            case '\n': escape = "\\n"; break;
+            case '\r': escape = "\\r"; break;
+            case '\t': escape = "\\t"; break;
+            default: break;
+        }
+        if (escape != NULL)
+        {
+            size_t n = strlen(escape);
+            if (used + n >= capacity) break;
+            memcpy(output + used, escape, n);
+            used += n;
+        }
+        else if (*p < 0x20)
+        {
+            snprintf(unicode_escape, sizeof(unicode_escape), "\\u%04x", *p);
+            size_t n = strlen(unicode_escape);
+            if (used + n >= capacity) break;
+            memcpy(output + used, unicode_escape, n);
+            used += n;
+        }
+        else output[used++] = (char)*p;
+    }
+    output[used] = '\0';
+    return used;
+}
+
+static void send_sse_event(
+    PGSocket client,
+    const char *event_name,
+    const char *type,
+    const char *message,
+    const char *url)
+{
+    char escaped_type[128], escaped_message[1024], escaped_url[1200];
+    char payload[2600];
+    json_escape(type, escaped_type, sizeof(escaped_type));
+    json_escape(message, escaped_message, sizeof(escaped_message));
+    json_escape(url, escaped_url, sizeof(escaped_url));
+
+    int length = snprintf(payload, sizeof(payload),
+        "event: %s\ndata: {\"type\":\"%s\",\"message\":\"%s\",\"url\":\"%s\"}\n\n",
+        event_name, escaped_type, escaped_message, escaped_url);
+    if (length > 0 && (size_t)length < sizeof(payload))
+        (void)send_all(client, payload, (size_t)length);
+}
+
+static void service_event_callback(
+    void *user_data,
+    const char *type,
+    const char *message,
+    const char *url)
+{
+    PGSocket client = *(PGSocket *)user_data;
+    send_sse_event(client, "activity", type, message, url);
+}
+
+static void send_sse_error(PGSocket client, const char *message)
+{
+    send_sse_event(client, "error", "extraction_failed", message, "");
+}
+
+static void send_sse_result(PGSocket client, const char *json)
+{
+    char *payload;
+    size_t length = strlen(json);
+    if (length > 4U * 1024U * 1024U) {
+        send_sse_error(client, "Extraction result exceeded the stream limit.");
+        return;
+    }
+    payload = malloc(length + 32);
+    if (payload == NULL) {
+        send_sse_error(client, "Could not allocate the extraction result event.");
+        return;
+    }
+    size_t used = (size_t)snprintf(payload, length + 32, "event: result\ndata: ");
+    for (size_t i = 0; i < length && used + 3 < length + 32; i++)
+    {
+        if (json[i] == '\r' || json[i] == '\n') continue;
+        payload[used++] = json[i];
+    }
+    payload[used++] = '\n';
+    payload[used++] = '\n';
+    (void)send_all(client, payload, used);
+    free(payload);
+}
+
 static char *find_case_insensitive(
     const char *text,
     const char *target)
@@ -176,6 +291,7 @@ static void handle_request(PGSocket client)
     FILE *file;
     long file_size;
     char *json = NULL;
+    int stream_events = 0;
 
     /* Read until the HTTP headers arrive. */
     while (received < PG_REQUEST_SIZE)
@@ -216,10 +332,11 @@ static void handle_request(PGSocket client)
         return;
     }
 
-    if (strncmp(request, "POST /extract ", 14) != 0)
+    stream_events = strncmp(request, "POST /extract-stream ", 21) == 0;
+    if (!stream_events && strncmp(request, "POST /extract ", 14) != 0)
     {
         send_json(client, 404, "Not Found",
-                  "{\"error\":\"Use POST /extract.\"}");
+                  "{\"error\":\"Use POST /extract or POST /extract-stream.\"}");
         return;
     }
 
@@ -287,6 +404,15 @@ static void handle_request(PGSocket client)
 
     snprintf(ctx.url, sizeof(ctx.url), "%s", normalized_url);
 
+    if (stream_events)
+    {
+        send_sse_headers(client);
+        ctx.event_callback = service_event_callback;
+        ctx.event_user_data = &client;
+        send_sse_event(client, "activity", "extraction_started",
+                       "Starting company intelligence extraction.", normalized_url);
+    }
+
     status = pg_pipeline_run(&ctx);
 
     if (status != PG_STATUS_OK)
@@ -294,8 +420,11 @@ static void handle_request(PGSocket client)
         pg_http_free(&ctx.response);
         pg_context_destroy(&ctx);
 
-        send_json(client, 502, "Bad Gateway",
-                  "{\"error\":\"Website extraction failed.\"}");
+        if (stream_events)
+            send_sse_error(client, "Website extraction failed.");
+        else
+            send_json(client, 502, "Bad Gateway",
+                      "{\"error\":\"Website extraction failed.\"}");
         return;
     }
 
@@ -309,8 +438,11 @@ static void handle_request(PGSocket client)
     if (status != PG_STATUS_OK)
     {
         remove(PG_RESPONSE_FILE);
-        send_json(client, 500, "Internal Server Error",
-                  "{\"error\":\"Could not export extraction results.\"}");
+        if (stream_events)
+            send_sse_error(client, "Could not export extraction results.");
+        else
+            send_json(client, 500, "Internal Server Error",
+                      "{\"error\":\"Could not export extraction results.\"}");
         return;
     }
 
@@ -319,8 +451,11 @@ static void handle_request(PGSocket client)
     if (file == NULL)
     {
         remove(PG_RESPONSE_FILE);
-        send_json(client, 500, "Internal Server Error",
-                  "{\"error\":\"Could not read extraction results.\"}");
+        if (stream_events)
+            send_sse_error(client, "Could not read extraction results.");
+        else
+            send_json(client, 500, "Internal Server Error",
+                      "{\"error\":\"Could not read extraction results.\"}");
         return;
     }
 
@@ -330,8 +465,11 @@ static void handle_request(PGSocket client)
     {
         fclose(file);
         remove(PG_RESPONSE_FILE);
-        send_json(client, 500, "Internal Server Error",
-                  "{\"error\":\"Could not read extraction results.\"}");
+        if (stream_events)
+            send_sse_error(client, "Could not read extraction results.");
+        else
+            send_json(client, 500, "Internal Server Error",
+                      "{\"error\":\"Could not read extraction results.\"}");
         return;
     }
 
@@ -343,8 +481,11 @@ static void handle_request(PGSocket client)
         free(json);
         fclose(file);
         remove(PG_RESPONSE_FILE);
-        send_json(client, 500, "Internal Server Error",
-                  "{\"error\":\"Could not load extraction results.\"}");
+        if (stream_events)
+            send_sse_error(client, "Could not load extraction results.");
+        else
+            send_json(client, 500, "Internal Server Error",
+                      "{\"error\":\"Could not load extraction results.\"}");
         return;
     }
 
@@ -352,7 +493,16 @@ static void handle_request(PGSocket client)
     fclose(file);
     remove(PG_RESPONSE_FILE);
 
-    send_json(client, 200, "OK", json);
+    if (stream_events)
+    {
+        send_sse_result(client, json);
+        send_sse_event(client, "complete", "extraction_completed",
+                       "Extraction stream completed.", normalized_url);
+    }
+    else
+    {
+        send_json(client, 200, "OK", json);
+    }
     free(json);
 }
 

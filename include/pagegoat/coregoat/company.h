@@ -8,6 +8,26 @@
 #define PG_MAX_PHONES  32
 #define PG_MAX_SOCIALS 32
 
+#define PG_MAX_PEOPLE 32
+#define PG_PERSON_NAME_SIZE 256
+#define PG_PERSON_ROLE_SIZE 128
+#define PG_PERSON_URL_SIZE 512
+#define PG_PERSON_EVIDENCE_SIZE 512
+
+#define PG_MAX_TECHNOLOGIES 64
+#define PG_TECHNOLOGY_SIZE 128
+#define PG_MAX_FONTS 24
+#define PG_FONT_SIZE 128
+
+typedef struct
+{
+    char name[PG_PERSON_NAME_SIZE];
+    char role[PG_PERSON_ROLE_SIZE];
+    char email[256];
+    char source_url[PG_PERSON_URL_SIZE];
+    char evidence[PG_PERSON_EVIDENCE_SIZE];
+} PGPerson;
+
 typedef struct
 {
     char title[256];
@@ -18,6 +38,18 @@ typedef struct
 
     char canonical[512];
 
+    /* Open Graph metadata */
+    char og_title[256];
+    char og_description[1024];
+    char og_image[512];
+    char og_url[512];
+
+    /* Twitter/X card metadata */
+    char twitter_card[128];
+    char twitter_title[256];
+    char twitter_description[1024];
+    char twitter_image[512];
+
     char favicon[512];
     char apple_icon[512];
     char theme_color[64];
@@ -26,6 +58,8 @@ typedef struct
     char sitemap[512];
 
     char logo[512];
+    char fonts[PG_MAX_FONTS][PG_FONT_SIZE];
+    int font_count;
 
     char company_name[256];
     char legal_name[256];
@@ -46,6 +80,12 @@ typedef struct
     char github[512];
     char tiktok[512];
     char pinterest[512];
+
+    char technologies[PG_MAX_TECHNOLOGIES][PG_TECHNOLOGY_SIZE];
+    int technology_count;
+
+PGPerson people[PG_MAX_PEOPLE];
+    int people_count;
 
 } PGCompany;
 

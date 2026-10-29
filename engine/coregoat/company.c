@@ -27,12 +27,36 @@ PGStatus pg_company_validate(const PGCompany *company)
         return PG_STATUS_INVALID_ARGUMENT;
     }
 
+    if (company->technology_count < 0 ||
+        company->technology_count > PG_MAX_TECHNOLOGIES ||
+        company->font_count < 0 ||
+        company->font_count > PG_MAX_FONTS)
+    {
+        return PG_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (company->people_count < 0 ||
+        company->people_count > PG_MAX_PEOPLE)
+    {
+        return PG_STATUS_INVALID_ARGUMENT;
+    }
+
     CHECK_FIELD(company->title);
     CHECK_FIELD(company->description);
     CHECK_FIELD(company->keywords);
     CHECK_FIELD(company->language);
     CHECK_FIELD(company->generator);
     CHECK_FIELD(company->canonical);
+
+    CHECK_FIELD(company->og_title);
+    CHECK_FIELD(company->og_description);
+    CHECK_FIELD(company->og_image);
+    CHECK_FIELD(company->og_url);
+
+    CHECK_FIELD(company->twitter_card);
+    CHECK_FIELD(company->twitter_title);
+    CHECK_FIELD(company->twitter_description);
+    CHECK_FIELD(company->twitter_image);
 
     CHECK_FIELD(company->favicon);
     CHECK_FIELD(company->apple_icon);
@@ -69,6 +93,18 @@ PGStatus pg_company_validate(const PGCompany *company)
         CHECK_FIELD(company->phones[i]);
 
         if (company->phones[i][0] == '\0')
+            return PG_STATUS_INVALID_ARGUMENT;
+    }
+
+    for (int i = 0; i < company->people_count; i++)
+    {
+        CHECK_FIELD(company->people[i].name);
+        CHECK_FIELD(company->people[i].role);
+        CHECK_FIELD(company->people[i].email);
+        CHECK_FIELD(company->people[i].source_url);
+        CHECK_FIELD(company->people[i].evidence);
+
+        if (company->people[i].name[0] == '\0')
             return PG_STATUS_INVALID_ARGUMENT;
     }
 

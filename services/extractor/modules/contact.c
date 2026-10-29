@@ -412,6 +412,34 @@ static char *visible_text_from_html(const char *html)
             }
             else if (c >= 32)
             {
+                /* Decode common obfuscation entities used for public contact details. */
+                const char *remaining = html + i;
+                if (c == '&' && contains_ci(remaining, "&#64;") &&
+                    strncmp(remaining, "&#64;", 5) == 0)
+                {
+                    text[out++] = '@'; i += 5; continue;
+                }
+                if (c == '&' && contains_ci(remaining, "&#x40;") && strncmp(remaining, "&#x40;", 6) == 0)
+                {
+                    text[out++] = '@'; i += 6; continue;
+                }
+                if (c == '&' && contains_ci(remaining, "&commat;") && strncmp(remaining, "&commat;", 8) == 0)
+                {
+                    text[out++] = '@'; i += 8; continue;
+                }
+                if (c == '&' && contains_ci(remaining, "&#46;") && strncmp(remaining, "&#46;", 5) == 0)
+                {
+                    text[out++] = '.'; i += 5; continue;
+                }
+                if (c == '&' && contains_ci(remaining, "&period;") && strncmp(remaining, "&period;", 8) == 0)
+                {
+                    text[out++] = '.'; i += 8; continue;
+                }
+                if (c == '&' && contains_ci(remaining, "&nbsp;") && strncmp(remaining, "&nbsp;", 6) == 0)
+                {
+                    if (out > 0 && text[out - 1] != ' ') text[out++] = ' ';
+                    i += 6; continue;
+                }
                 text[out++] = (char)c;
             }
         }

@@ -9,7 +9,9 @@ export default function SiteFooter() {
       >
         <span>© {new Date().getFullYear()} welookit.com</span>
       </a>
-      <span>Engine built on C. Pure speed.</span>
+      <span>
+        Engine built on <a href="https://www.c-language.org/">C</a>. Pure speed.
+      </span>
 
       <nav className="site-footer-nav" aria-label="Footer navigation">
         <a href="/about">About</a>

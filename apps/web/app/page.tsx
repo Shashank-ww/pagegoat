@@ -1,16 +1,16 @@
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
+  ChevronDown,
+  ChevronUp,
   ArrowUpRight,
   Building2,
   Clock3,
   Home,
   Loader,
   Menu,
-  RotateCw,
   Search,
   X,
 } from "lucide-react";
@@ -18,11 +18,91 @@ import {
 type RecordValue = Record<string, unknown>;
 type Tab = "Overview" | "Contacts" | "Website & social" | "Technology";
 type EngineState = "idle" | "checking" | "online" | "error";
+type ActivityEvent = { type: string; message: string; url?: string };
+
+async function readSseResponse(
+  response: Response,
+  onActivity: (event: ActivityEvent) => void,
+): Promise<RecordValue> {
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = raw.trim();
+    try {
+      const payload: unknown = JSON.parse(raw);
+      if (isRecord(payload)) message = text(payload.error) || text(payload.message) || message;
+    } catch {
+      // Keep the upstream response text when it is not JSON.
+    }
+    throw new Error(message || `The request failed (${response.status}).`);
+  }
+  if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
+    throw new Error("The extraction service did not return a valid activity stream.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: unknown = null;
+  const processFrame = (frame: string) => {
+    let eventName = "message";
+    const dataLines: string[] = [];
+    for (const line of frame.split(/\r?\n/)) {
+      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    if (!dataLines.length) return;
+    const rawData = dataLines.join("\n");
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawData);
+    } catch {
+      if (eventName === "error") throw new Error(rawData || "The extraction engine reported an error.");
+      return;
+    }
+    if (eventName === "activity" && isRecord(payload)) {
+      onActivity({
+        type: text(payload.type) || "activity",
+        message: text(payload.message) || "Engine activity received.",
+        url: text(payload.url),
+      });
+    } else if (eventName === "result" && isRecord(payload)) {
+      result = payload;
+    } else if (eventName === "complete" && isRecord(payload)) {
+      onActivity({
+        type: text(payload.type) || "complete",
+        message: text(payload.message) || "Extraction completed.",
+        url: text(payload.url),
+      });
+    } else if (eventName === "error" && isRecord(payload)) {
+      throw new Error(text(payload.message) || text(payload.error) || "The extraction engine reported an error.");
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let boundary = buffer.search(/\r?\n\r?\n/);
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        const delimiter = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] || "\n\n";
+        buffer = buffer.slice(boundary + delimiter.length);
+        processFrame(frame);
+        boundary = buffer.search(/\r?\n\r?\n/);
+      }
+      if (done) break;
+    }
+    if (buffer.trim()) processFrame(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+  if (!isRecord(result)) throw new Error("The activity stream ended without an extraction result.");
+  return result;
+}
 
 const TABS: Tab[] = ["Overview", "Contacts", "Website & social", "Technology"];
-const EXAMPLES = ["Infosys", "Siemens", "Livpure"];
+const EXAMPLES = ["Infosys", "Siemens", "Accenture", "Medtronic"];
 const RECENTS_KEY = "welookit-recent-searches";
-
 function isRecord(value: unknown): value is RecordValue {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -84,7 +164,6 @@ function linkUrl(value: unknown): string {
 function FieldRows({ data }: { data: RecordValue }) {
   const entries = Object.entries(data).filter(([, value]) => hasValue(value));
   if (!entries.length) return <p className="empty-note">No information available for this section.</p>;
-
   return (
     <dl className="field-list">
       {entries.map(([key, value]) => {
@@ -120,7 +199,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function LinkRows({ links }: { links: Array<{ label: string; value: unknown }> }) {
   const available = links.filter(({ value }) => hasValue(value));
   if (!available.length) return <p className="empty-note">No public links returned.</p>;
-
   return (
     <dl className="field-list">
       {available.map(({ label, value }) => {
@@ -145,7 +223,6 @@ function LinkRows({ links }: { links: Array<{ label: string; value: unknown }> }
 function PeopleList({ people }: { people: unknown[] }) {
   const entries = people.filter(isRecord);
   if (!entries.length) return <p className="empty-note">No leadership details were returned.</p>;
-
   return (
     <div className="people-grid">
       {entries.map((person, index) => {
@@ -170,6 +247,7 @@ function PeopleList({ people }: { people: unknown[] }) {
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
+  const [activityOpen, setActivityOpen] = useState(false);
   const [companyInput, setCompanyInput] = useState("");
   const [result, setResult] = useState<RecordValue | null>(null);
   const [loading, setLoading] = useState(false);
@@ -182,9 +260,10 @@ export default function HomePage() {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const [checkedAt, setCheckedAt] = useState("");
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
   const startedAt = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
+  
   useEffect(() => {
     if (!sidebarOpen) return;
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -201,21 +280,15 @@ export default function HomePage() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [sidebarOpen]);
-
   useEffect(() => {
   if (!loading) return;
-
   const updateElapsed = () => {
     setLiveElapsedMs(performance.now() - startedAt.current);
   };
-
   updateElapsed();
-
   const interval = window.setInterval(updateElapsed, 100);
-
   return () => window.clearInterval(interval);
 }, [loading]);
-
   useEffect(() => {
     try {
       const saved = localStorage.getItem(RECENTS_KEY);
@@ -227,7 +300,6 @@ export default function HomePage() {
       // Search still works if browser storage is unavailable.
     }
   }, []);
-
   const company = useMemo(() => (isRecord(result?.company) ? result.company : {}), [result]);
   const organization = isRecord(company.organization) ? company.organization : {};
   const contact = isRecord(company.contact) ? company.contact : {};
@@ -240,7 +312,13 @@ export default function HomePage() {
     : Array.isArray(company.technologies)
       ? company.technologies
       : [];
-
+  const fontFamilies = Array.isArray(branding.font_families)
+    ? branding.font_families.slice(0, 4)
+    : Array.isArray(branding.fonts)
+      ? branding.fonts.slice(0, 4)
+      : [];
+  const openGraph = isRecord(seo.open_graph) ? seo.open_graph : {};
+  const twitterCard = isRecord(seo.twitter_card) ? seo.twitter_card : {};
   const website = text(result?.website) || companyInput;
   const websiteHost = hostname(website);
   const companyName =
@@ -249,37 +327,36 @@ export default function HomePage() {
     text(company.legal_name) ||
     websiteHost ||
     companyInput;
-
   const socialLinks = Object.entries(social)
     .filter(([, value]) => hasValue(value))
     .map(([label, value]) => ({ label: humanize(label), value }));
-
   const overviewData: RecordValue = {
     Description: company.description,
     Keywords: company.keywords,
     Language: company.language,
+    "Canonical URL": company.canonical_url ?? seo.canonical_url ?? seo.canonical,
     "Legal name": organization.legal_name,
     Founded: organization.founded,
   };
-
   const contactData: RecordValue = {
     Emails: contact.emails,
     Phones: contact.phones,
     Addresses: contact.addresses,
   };
-
   const websiteData: RecordValue = {
     Website: website,
     "Theme color": branding.theme_color,
     Generator: seo.generator ?? company.generator,
+    "Canonical URL": company.canonical_url ?? seo.canonical_url ?? seo.canonical,
+    Robots: seo.robots,
     Sitemap: seo.sitemap,
   };
-
   function goHome() {
     window.history.pushState({}, "", "/");
     setSearched(false);
     setResult(null);
     setError("");
+    setActivityEvents([]);
     setLoading(false);
     setElapsedMs(null);
     setQuery("");
@@ -287,15 +364,14 @@ export default function HomePage() {
     setTab("Overview");
     setSidebarOpen(false);
   }
-
   async function runSearch(rawQuery: string) {
     const value = rawQuery.trim();
     if (!value || loading) return;
-
     setQuery(value);
     setCompanyInput(value);
     setError("");
     setResult(null);
+    setActivityEvents([]);
     setLoading(true);
     setSearched(true);
     setTab("Overview");
@@ -303,28 +379,21 @@ export default function HomePage() {
     setElapsedMs(null);
     setEngineStatus("checking");
     startedAt.current = performance.now();
-
     // Keep the address bar clean: searches do not add a ?url=... parameter.
     window.history.pushState({}, "", "/");
-
     try {
-      const response = await fetch("/api/extract", {
+      const response = await fetch("/api/extract-stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ url: value }),
+        cache: "no-store",
       });
-      const payload: unknown = await response.json();
-
-      if (!response.ok) {
-        const message = isRecord(payload) ? text(payload.error) || text(payload.message) : "";
-        throw new Error(message || `The request failed (${response.status}).`);
-      }
-
-      const data = isRecord(payload) ? payload : {};
+      const data = await readSseResponse(response, (event) => {
+        setActivityEvents((current) => [...current, event].slice(-40));
+      });
       setResult(data);
       setEngineStatus("online");
       setCheckedAt(new Date().toLocaleString());
-
       setRecentSearches((current) => {
         const updated = [value, ...current.filter((item) => item.toLowerCase() !== value.toLowerCase())].slice(0, 8);
         try {
@@ -342,10 +411,8 @@ export default function HomePage() {
       setLoading(false);
     }
   }
-
   function renderTabContent() {
     if (!result) return null;
-
     if (tab === "Contacts") {
       return (
         <div className="content-grid">
@@ -360,7 +427,6 @@ export default function HomePage() {
         </div>
       );
     }
-
     if (tab === "Website & social") {
       return (
         <div className="content-grid">
@@ -388,12 +454,15 @@ export default function HomePage() {
                 })}
               </div>
               <FieldRows data={branding} />
+              <div className="branding-fonts">
+                <h3>Primary fonts</h3>
+                {fontFamilies.length ? <p>{fontFamilies.map(displayValue).filter(Boolean).join(" · ")}</p> : <p className="empty-note">No primary fonts were detected.</p>}
+              </div>
             </Section>
           </div>
         </div>
       );
     }
-
     if (tab === "Technology") {
       return (
         <div className="content-grid">
@@ -409,27 +478,38 @@ export default function HomePage() {
                 Description: company.description,
                 Keywords: company.keywords,
                 Language: company.language,
+                "Canonical URL": company.canonical_url ?? seo.canonical_url ?? seo.canonical,
                 Generator: seo.generator ?? company.generator,
               }} />
+            </Section>
+            <Section title="Primary fonts">
+              {fontFamilies.length ? (
+                <ul className="technology-list">{fontFamilies.map((font, index) => <li key={`${displayValue(font)}-${index}`}>{displayValue(font)}</li>)}</ul>
+              ) : <p className="empty-note">No primary fonts were detected.</p>}
             </Section>
           </div>
           <div className="content-column">
             <Section title="SEO signals"><FieldRows data={{
               Robots: seo.robots,
               Sitemap: seo.sitemap,
-              "Open Graph": seo.open_graph,
-              "Twitter card": seo.twitter_card,
+              "Open Graph title": openGraph.title,
+              "Open Graph description": openGraph.description,
+              "Open Graph image": openGraph.image_url ?? openGraph.image,
+              "Open Graph URL": openGraph.url,
+              "Twitter card type": twitterCard.card ?? seo.twitter_card_type,
+              "Twitter title": twitterCard.title,
+              "Twitter description": twitterCard.description,
+              "Twitter image": twitterCard.image_url ?? twitterCard.image,
             }} /></Section>
             <Section title="Other returned details">
               <FieldRows data={Object.fromEntries(Object.entries(company).filter(([key]) =>
-                !["name", "title", "description", "keywords", "language", "contact", "social", "branding", "seo", "organization", "people", "technology_stack", "technologies"].includes(key),
+                !["name", "title", "description", "keywords", "language", "contact", "social", "branding", "seo", "organization", "people", "technology_stack", "technologies", "canonical_url"].includes(key),
               ))} />
             </Section>
           </div>
         </div>
       );
     }
-
     return (
       <div className="content-grid">
         <div className="content-column">
@@ -453,21 +533,23 @@ export default function HomePage() {
       </div>
     );
   }
-
 const displayedElapsedMs = loading ? liveElapsedMs : elapsedMs;
-
 const elapsedLabel =
   displayedElapsedMs === null
     ? ""
-    : displayedElapsedMs < 1000
-      ? `${Math.round(displayedElapsedMs)} ms`
-      : `${(displayedElapsedMs / 1000).toFixed(2)} seconds`;
-
+    : (() => {
+        const totalSeconds = Math.floor(displayedElapsedMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, "0")}:${String(
+          seconds
+        ).padStart(2, "0")}`;
+      })();
   return (
     <main className={`site-shell ${searched ? "results-shell" : "home-shell"}`}>
       <header className="site-header">
         <a className="wordmark" href="/" onClick={(event) => { event.preventDefault(); goHome(); }} aria-label="Welookit homepage">
-          <span className="brand-icon"><Search size={19} strokeWidth={2.2} /></span>
+          <span className="brand-icon"><Search size={19} strokeWidth={3.2} /></span>
           <span>welookit</span>
         </a>
         {searched && (
@@ -482,7 +564,6 @@ const elapsedLabel =
           <Menu size={21} />
         </button>
       </header>
-
       {!searched ? (
         <>
           <section className="hero">
@@ -491,7 +572,6 @@ const elapsedLabel =
               <video
                 src="/otter-commuting.webm"
                 autoPlay
-                loop
                 muted
                 playsInline
                 aria-hidden="true"
@@ -503,7 +583,7 @@ const elapsedLabel =
               <Search className="search-symbol" size={19} aria-hidden="true" />
               <input aria-label="Company name or website" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Enter company name or website" autoComplete="off" />
               <button type="submit" disabled={loading || !query.trim()}>
-                {loading ? <><RotateCw size={16} className="spin" /> Looking</> : "Look it up"}
+                {loading ? <><Loader size={16} className="spin" /> Looking</> : "Look it up"}
               </button>
             </form>
             <div className="example-searches">
@@ -513,7 +593,7 @@ const elapsedLabel =
               ))}
             </div>
             {error && <p className="home-error" role="alert">{error}</p>}
-            <p className="privacy-note">Public information. One simple search.</p>
+            <p className="privacy-note">All public information. One quick search. Free until Dec &apos;27.</p>
           </section>
           <section className="what-you-find">
             <h2>What you can find</h2>
@@ -537,7 +617,6 @@ const elapsedLabel =
                   : "Ready"}
             </span>
           </div> */}
-
           <section className="company-heading">
             <div className="company-title-row">
               <div className="company-avatar"><Building2 size={24} /></div>
@@ -552,17 +631,97 @@ const elapsedLabel =
               {loading ? "Looking for public information" : error ? "Lookup could not be completed" : result ? `Checked at ${checkedAt || "just now"}` : "Preparing lookup"}
             </p>
           </section>
+          {loading && (
+            <div className="loading-panel" role="status" aria-live="polite">
+              <span className="loading-line" />
+              <div className="loading-row">
+                <p className="loading-message">
+                  <Loader size={16} className="spin" />
+                  <span>Inspecting available data sources…</span>
+                </p>
+                <span className="search-duration" aria-label={`Elapsed time: ${elapsedLabel || "0 ms"}`}>
+                  {elapsedLabel || "0 ms"}
+                </span>
+              </div>
+            </div>
+          )}
+            
 
-          {loading && <div className="loading-panel" role="status"><span className="loading-line" /><p><RotateCw size={15} className="spin" /><span>
-            Inspecting all available data…
-            {loading && (
-              <span className="search-duration"> {elapsedLabel || "0 ms"}</span>
-            )}
-          </span>
-          </p></div>}
+{activityEvents.length > 0 && (
+  <section
+    className={`activity-panel ${loading ? "is-live" : "is-complete"}`}
+    aria-label="Engine activity"
+    aria-live="polite"
+  >
+    <div
+      className="activity-heading"
+      role="button"
+      tabIndex={0}
+      onClick={() => setActivityOpen((open) => !open)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setActivityOpen((open) => !open);
+        }
+      }}
+      aria-expanded={activityOpen}
+    >
+      <span className="activity-heading-title">
+        ENGINE ACTIVITY
+      </span>
 
+      <span className="activity-heading-meta">
+        <span className="activity-status">
+          {loading ? "PROCESSING" : "COMPLETED"}
+        </span>
+
+        <span className="activity-count">
+          {activityEvents.length}
+        </span>
+
+        <span className="activity-toggle-icon" aria-hidden="true">
+          {activityOpen ? (
+            <ChevronUp size={16} />
+          ) : (
+            <ChevronDown size={16} />
+          )}
+        </span>
+      </span>
+    </div>
+
+    {activityOpen && (
+      <ol className="activity-list">
+        {[...activityEvents].reverse().map((item, index) => (
+          <li
+            className={`activity-item ${
+              loading && index === 0 ? "is-current is-new" : ""
+            }`}
+            key={`${item.type}-${index}`}
+          >
+            <span className="activity-marker" aria-hidden="true" />
+
+            <div className="activity-copy">
+              <span className="activity-type">
+                {humanize(item.type)}
+              </span>
+
+              <p className="activity-message">{item.message}</p>
+
+              {item.url && item.url !== website && (
+                <span className="activity-url" title={item.url}>
+                  {item.url}
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+)}
+
+            
           {error && !loading && <div className="error-panel" role="alert"><h2>We couldn’t retrieve this company</h2><p>{error}</p><button className="outline-button" onClick={() => void runSearch(companyInput)}>Try again</button></div>}
-
           {result && !loading && (
             <>
               <nav className="tabs" aria-label="Company information categories">
@@ -586,7 +745,6 @@ const elapsedLabel =
           )}
         </div>
       )}
-
       {/* <footer className={`site-footer ${searched ? "results-footer" : ""}`}>
         <span>welookit - company intelligence discovery</span>
         <nav aria-label="Footer">
@@ -595,7 +753,6 @@ const elapsedLabel =
           <a href="/terms">Terms</a>
         </nav>
       </footer> */}
-
       <button
         className={`drawer-backdrop ${sidebarOpen ? "is-open" : ""}`}
         aria-label="Close menu"

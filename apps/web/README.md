@@ -1,36 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Welookit / PageGoat streaming and metadata update
 
-## Getting Started
+Files in this patch:
+- app/page.tsx: updated page with real SSE activity events and updated metadata/font mappings.
+- app/api/extract-stream/route.ts: new Next.js route that streams /extract-stream from the C engine.
+- globals.css.append.css: CSS additions only. Append this file's contents to the END of your existing app/globals.css. Do not replace globals.css.
 
-First, run the development server:
+Apply:
+1. Back up your current frontend changes through Git as usual (no project replacement needed).
+2. Copy app/page.tsx over your existing app/page.tsx.
+3. Add app/api/extract-stream/route.ts at the matching path.
+4. Append globals.css.append.css to the end of app/globals.css. Existing CSS comments and styles are not removed.
+5. Keep the existing app/api/extract/route.ts unchanged as the JSON endpoint/fallback for any other callers.
+6. Ensure PAGEGOAT_ENGINE_URL points to the reachable engine host in deployment; localhost is only a local default.
+7. Run npm run build and test a lookup. Verify activity events appear as received, results render, fonts are capped to four, and SEO fields appear only when returned.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The route assumes the C engine's /extract-stream endpoint emits SSE event names: activity, result, complete, and error. It passes the event stream through without buffering. This does not change the C engine.
