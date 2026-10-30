@@ -1,5 +1,5 @@
 
-name: PageGoat Oracle Linux 9 Build
+name: PageGoat Build and Deploy
 
 on:
   workflow_dispatch:
@@ -7,73 +7,34 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: pagegoat-production-deploy
+  cancel-in-progress: false
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-24.04
 
-    container:
-      image: oraclelinux:9
-
     steps:
-      - name: Install build dependencies
-        run: |
-          dnf -y install \
-            gcc \
-            gcc-c++ \
-            cmake \
-            make \
-            openssl-devel \
-            zlib-devel \
-            pkgconf-pkg-config \
-            tar \
-            gzip \
-            git \
-            curl \
-            file \
-            binutils
-          dnf clean all
-
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build compatible static libcurl
+      - name: Install build dependencies
         run: |
-          curl -fL --retry 3 \
-            https://curl.se/download/curl-8.12.1.tar.gz \
-            -o /tmp/curl.tar.gz
-
-          tar -xzf /tmp/curl.tar.gz -C /tmp
-          cd /tmp/curl-8.12.1
-
-          ./configure \
-            --prefix=/opt/pagegoat-curl \
-            --with-openssl \
-            --with-zlib \
-            --disable-shared \
-            --enable-static \
-            --without-libpsl \
-            --without-brotli \
-            --without-zstd \
-            --without-nghttp2
-
-          make -j2
-          make install
-
-      - name: Verify custom libcurl
-        run: |
-          test -f /opt/pagegoat-curl/include/curl/curl.h
-          test -f /opt/pagegoat-curl/lib/libcurl.a
-
-          /opt/pagegoat-curl/bin/curl-config --version
-          /opt/pagegoat-curl/bin/curl-config --static-libs
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            cmake \
+            make \
+            libcurl4-openssl-dev
 
       - name: Configure CMake
         run: |
           cmake -S . -B build-linux \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCURL_INCLUDE_DIR=/opt/pagegoat-curl/include \
-            -DCURL_LIBRARY=/opt/pagegoat-curl/lib/libcurl.a \
-            "-DCMAKE_C_STANDARD_LIBRARIES=-lssl -lcrypto -lz -ldl -pthread"
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build existing targets
         run: |
@@ -91,11 +52,11 @@ jobs:
           ldd build-linux/pagegoat-service
 
           if ldd build-linux/pagegoat-service | grep -q "not found"; then
-            echo "ERROR: One or more runtime libraries are missing."
+            echo "ERROR: Missing runtime libraries."
             exit 1
           fi
 
-      - name: Package service binary
+      - name: Package build artifact
         run: |
           mkdir -p pagegoat-linux
           cp build-linux/pagegoat-service pagegoat-linux/
@@ -103,12 +64,53 @@ jobs:
           tar -czf pagegoat-linux.tar.gz \
             -C pagegoat-linux .
 
-          tar -tzf pagegoat-linux.tar.gz
-
       - name: Upload Linux build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pagegoat-oracle-linux-9
+          name: pagegoat-ubuntu-24.04
           path: pagegoat-linux.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+      - name: Configure deployment SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/pagegoat_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/pagegoat_deploy
+          chmod 600 ~/.ssh/known_hosts
+
+          ssh-keygen -y -f ~/.ssh/pagegoat_deploy > /dev/null
+
+      - name: Deploy to Google VM
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          scp \
+            -P "$DEPLOY_PORT" \
+            -i ~/.ssh/pagegoat_deploy \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            build-linux/pagegoat-service \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/pagegoat-service"
+
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i ~/.ssh/pagegoat_deploy \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo -n /usr/bin/install -o '$DEPLOY_USER' -g '$DEPLOY_USER' -m 0755 /tmp/pagegoat-service /home/$DEPLOY_USER/pagegoat/build-linux/pagegoat-service &&
+             sudo -n /usr/bin/systemctl restart pagegoat &&
+             sudo -n /usr/bin/systemctl is-active --quiet pagegoat &&
+             rm -f /tmp/pagegoat-service"
+
+          echo "PageGoat deployment completed successfully."
