@@ -1,5 +1,4 @@
-
-name: PageGoat Build and Deploy
+name: PageGoat Linux Build and Deploy
 
 on:
   workflow_dispatch:
@@ -11,106 +10,110 @@ permissions:
   contents: read
 
 concurrency:
-  group: pagegoat-production-deploy
+  group: pagegoat-production
   cancel-in-progress: false
 
 jobs:
   build-and-deploy:
+    name: Build and Deploy to Google VM
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            gcc \
-            cmake \
-            make \
-            libcurl4-openssl-dev
+          sudo apt-get install -y gcc cmake make libcurl4-openssl-dev
 
-      - name: Configure CMake
+      - name: Configure
         run: |
           cmake -S . -B build-linux \
             -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build existing targets
+      - name: Build
         run: |
-          cmake --build build-linux --parallel 2 --verbose
+          cmake --build build-linux --parallel 2
 
-      - name: Verify Linux binaries
+      - name: Verify binaries
         run: |
           test -x build-linux/pagegoat
           test -x build-linux/pagegoat-service
-
-          file build-linux/pagegoat
-          file build-linux/pagegoat-service
-
-          echo "--- Service runtime dependencies ---"
           ldd build-linux/pagegoat-service
 
           if ldd build-linux/pagegoat-service | grep -q "not found"; then
-            echo "ERROR: Missing runtime libraries."
+            echo "Missing runtime dependency"
             exit 1
           fi
 
-      - name: Package build artifact
-        run: |
-          mkdir -p pagegoat-linux
-          cp build-linux/pagegoat-service pagegoat-linux/
-
-          tar -czf pagegoat-linux.tar.gz \
-            -C pagegoat-linux .
-
-      - name: Upload Linux build artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pagegoat-ubuntu-24.04
-          path: pagegoat-linux.tar.gz
-          if-no-files-found: error
+          name: pagegoat-linux
+          path: build-linux/pagegoat-service
           retention-days: 7
 
-      - name: Configure deployment SSH
+      - name: Configure SSH
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/pagegoat_deploy
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/pagegoat_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
           chmod 600 ~/.ssh/pagegoat_deploy
           chmod 600 ~/.ssh/known_hosts
 
           ssh-keygen -y -f ~/.ssh/pagegoat_deploy > /dev/null
 
-      - name: Deploy to Google VM
+      - name: Test SSH connection
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -vv \
+            -p "$PORT" \
+            -i ~/.ssh/pagegoat_deploy \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$USER@$HOST" \
+            "echo 'SSH connection successful'; whoami"
+
+      - name: Transfer service binary
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
           scp \
-            -P "$DEPLOY_PORT" \
+            -P "$PORT" \
             -i ~/.ssh/pagegoat_deploy \
             -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             build-linux/pagegoat-service \
-            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/pagegoat-service"
+            "$USER@$HOST:/tmp/pagegoat-service"
 
+      - name: Install and restart PageGoat
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
           ssh \
-            -p "$DEPLOY_PORT" \
+            -p "$PORT" \
             -i ~/.ssh/pagegoat_deploy \
             -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo -n /usr/bin/install -o '$DEPLOY_USER' -g '$DEPLOY_USER' -m 0755 /tmp/pagegoat-service /home/$DEPLOY_USER/pagegoat/build-linux/pagegoat-service &&
+            "$USER@$HOST" \
+            "sudo -n /usr/bin/install -o $USER -g $USER -m 0755 /tmp/pagegoat-service /home/$USER/pagegoat/build-linux/pagegoat-service &&
              sudo -n /usr/bin/systemctl restart pagegoat &&
-             sudo -n /usr/bin/systemctl is-active --quiet pagegoat &&
+             sudo -n /usr/bin/systemctl is-active pagegoat &&
              rm -f /tmp/pagegoat-service"
-
-          echo "PageGoat deployment completed successfully."
