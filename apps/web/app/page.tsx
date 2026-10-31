@@ -1,4 +1,6 @@
+
 "use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -35,6 +37,7 @@ async function readSseResponse(
     }
     throw new Error(message || `The request failed (${response.status}).`);
   }
+
   if (!response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
     throw new Error("The extraction service did not return a valid activity stream.");
   }
@@ -43,22 +46,30 @@ async function readSseResponse(
   const decoder = new TextDecoder();
   let buffer = "";
   let result: unknown = null;
+
   const processFrame = (frame: string) => {
     let eventName = "message";
     const dataLines: string[] = [];
+
     for (const line of frame.split(/\r?\n/)) {
       if (line.startsWith("event:")) eventName = line.slice(6).trim();
       else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
     }
+
     if (!dataLines.length) return;
+
     const rawData = dataLines.join("\n");
     let payload: unknown;
+
     try {
       payload = JSON.parse(rawData);
     } catch {
-      if (eventName === "error") throw new Error(rawData || "The extraction engine reported an error.");
+      if (eventName === "error") {
+        throw new Error(rawData || "The extraction engine reported an error.");
+      }
       return;
     }
+
     if (eventName === "activity" && isRecord(payload)) {
       onActivity({
         type: text(payload.type) || "activity",
@@ -74,7 +85,11 @@ async function readSseResponse(
         url: text(payload.url),
       });
     } else if (eventName === "error" && isRecord(payload)) {
-      throw new Error(text(payload.message) || text(payload.error) || "The extraction engine reported an error.");
+      throw new Error(
+        text(payload.message) ||
+          text(payload.error) ||
+          "The extraction engine reported an error.",
+      );
     }
   };
 
@@ -82,27 +97,37 @@ async function readSseResponse(
     while (true) {
       const { value, done } = await reader.read();
       buffer += decoder.decode(value, { stream: !done });
+
       let boundary = buffer.search(/\r?\n\r?\n/);
+
       while (boundary !== -1) {
         const frame = buffer.slice(0, boundary);
         const delimiter = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] || "\n\n";
+
         buffer = buffer.slice(boundary + delimiter.length);
         processFrame(frame);
         boundary = buffer.search(/\r?\n\r?\n/);
       }
+
       if (done) break;
     }
+
     if (buffer.trim()) processFrame(buffer);
   } finally {
     reader.releaseLock();
   }
-  if (!isRecord(result)) throw new Error("The activity stream ended without an extraction result.");
+
+  if (!isRecord(result)) {
+    throw new Error("The activity stream ended without an extraction result.");
+  }
+
   return result;
 }
 
 const TABS: Tab[] = ["Overview", "Contacts", "Website & social", "Technology"];
 const EXAMPLES = ["Infosys", "Siemens", "Accenture", "Medtronic"];
 const RECENTS_KEY = "welookit-recent-searches";
+
 function isRecord(value: unknown): value is RecordValue {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -130,12 +155,14 @@ function displayValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "string" || typeof value === "number") return String(value);
   if (Array.isArray(value)) return value.map(displayValue).filter(Boolean).join(", ");
+
   if (isRecord(value)) {
     return Object.entries(value)
       .filter(([, child]) => hasValue(child))
       .map(([key, child]) => `${humanize(key)}: ${displayValue(child)}`)
       .join(" · ");
   }
+
   return "";
 }
 
@@ -156,18 +183,25 @@ function hostname(value: string): string {
 
 function linkUrl(value: unknown): string {
   const valueText = text(value).trim();
+
   if (/^(https?:\/\/|mailto:|tel:)/i.test(valueText)) return valueText;
   if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(valueText)) return `https://${valueText}`;
+
   return "";
 }
 
 function FieldRows({ data }: { data: RecordValue }) {
   const entries = Object.entries(data).filter(([, value]) => hasValue(value));
-  if (!entries.length) return <p className="empty-note">No information available for this section.</p>;
+
+  if (!entries.length) {
+    return <p className="empty-note">No information available for this section.</p>;
+  }
+
   return (
     <dl className="field-list">
       {entries.map(([key, value]) => {
         const url = typeof value === "string" ? linkUrl(value) : "";
+
         return (
           <div className="field-row" key={key}>
             <dt>{humanize(key)}</dt>
@@ -198,11 +232,16 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function LinkRows({ links }: { links: Array<{ label: string; value: unknown }> }) {
   const available = links.filter(({ value }) => hasValue(value));
-  if (!available.length) return <p className="empty-note">No public links returned.</p>;
+
+  if (!available.length) {
+    return <p className="empty-note">No public links returned.</p>;
+  }
+
   return (
     <dl className="field-list">
       {available.map(({ label, value }) => {
         const url = linkUrl(value);
+
         return (
           <div className="field-row" key={label}>
             <dt>{label}</dt>
@@ -211,7 +250,9 @@ function LinkRows({ links }: { links: Array<{ label: string; value: unknown }> }
                 <a href={url} target="_blank" rel="noreferrer">
                   {text(value)} <ArrowUpRight size={13} aria-hidden="true" />
                 </a>
-              ) : displayValue(value)}
+              ) : (
+                displayValue(value)
+              )}
             </dd>
           </div>
         );
@@ -222,22 +263,56 @@ function LinkRows({ links }: { links: Array<{ label: string; value: unknown }> }
 
 function PeopleList({ people }: { people: unknown[] }) {
   const entries = people.filter(isRecord);
-  if (!entries.length) return <p className="empty-note">No leadership details were returned.</p>;
+
+  if (!entries.length) {
+    return <p className="empty-note">No leadership details were returned.</p>;
+  }
+
   return (
     <div className="people-grid">
       {entries.map((person, index) => {
-        const name = text(person.name) || text(person.full_name) || text(person.title) || `Person ${index + 1}`;
-        const role = text(person.role) || text(person.position) || text(person.job_title);
+        const name =
+          text(person.name) ||
+          text(person.full_name) ||
+          text(person.title) ||
+          `Person ${index + 1}`;
+
+        const role =
+          text(person.role) ||
+          text(person.position) ||
+          text(person.job_title);
+
+        const evidence = text(person.evidence).trim();
+
         const details = Object.fromEntries(
           Object.entries(person).filter(
-            ([key]) => !["name", "full_name", "title", "role", "position", "job_title"].includes(key),
+            ([key]) =>
+              ![
+                "name",
+                "full_name",
+                "title",
+                "role",
+                "position",
+                "job_title",
+                "evidence",
+              ].includes(key),
           ),
         );
+
         return (
           <article className="person-card" key={`${name}-${index}`}>
             <h3>{name}</h3>
+
             {role && <p className="person-role">{role}</p>}
+
             <FieldRows data={details} />
+
+            {evidence && (
+              <details className="person-evidence">
+                <summary>Evidence</summary>
+                <p>{evidence}</p>
+              </details>
+            )}
           </article>
         );
       })}
@@ -261,75 +336,108 @@ export default function HomePage() {
   const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const [checkedAt, setCheckedAt] = useState("");
   const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+
   const startedAt = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   useEffect(() => {
     if (!sidebarOpen) return;
+
     const previousHtmlOverflow = document.documentElement.style.overflow;
     const previousBodyOverflow = document.body.style.overflow;
+
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSidebarOpen(false);
     };
+
     window.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousBodyOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [sidebarOpen]);
+
   useEffect(() => {
-  if (!loading) return;
-  const updateElapsed = () => {
-    setLiveElapsedMs(performance.now() - startedAt.current);
-  };
-  updateElapsed();
-  const interval = window.setInterval(updateElapsed, 100);
-  return () => window.clearInterval(interval);
-}, [loading]);
+    if (!loading) return;
+
+    const updateElapsed = () => {
+      setLiveElapsedMs(performance.now() - startedAt.current);
+    };
+
+    updateElapsed();
+
+    const interval = window.setInterval(updateElapsed, 100);
+
+    return () => window.clearInterval(interval);
+  }, [loading]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(RECENTS_KEY);
+
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
-        if (Array.isArray(parsed)) setRecentSearches(parsed.filter((item): item is string => typeof item === "string").slice(0, 8));
+
+        if (Array.isArray(parsed)) {
+          setRecentSearches(
+            parsed
+              .filter((item): item is string => typeof item === "string")
+              .slice(0, 8),
+          );
+        }
       }
     } catch {
       // Search still works if browser storage is unavailable.
     }
   }, []);
-  const company = useMemo(() => (isRecord(result?.company) ? result.company : {}), [result]);
+
+  const company = useMemo(
+    () => (isRecord(result?.company) ? result.company : {}),
+    [result],
+  );
+
   const organization = isRecord(company.organization) ? company.organization : {};
   const contact = isRecord(company.contact) ? company.contact : {};
   const social = isRecord(company.social) ? company.social : {};
   const branding = isRecord(company.branding) ? company.branding : {};
   const seo = isRecord(company.seo) ? company.seo : {};
+
   const people = Array.isArray(company.people) ? company.people : [];
+
   const technologies = Array.isArray(company.technology_stack)
     ? company.technology_stack
     : Array.isArray(company.technologies)
       ? company.technologies
       : [];
+
   const fontFamilies = Array.isArray(branding.font_families)
     ? branding.font_families.slice(0, 4)
     : Array.isArray(branding.fonts)
       ? branding.fonts.slice(0, 4)
       : [];
+
   const openGraph = isRecord(seo.open_graph) ? seo.open_graph : {};
   const twitterCard = isRecord(seo.twitter_card) ? seo.twitter_card : {};
+
   const website = text(result?.website) || companyInput;
   const websiteHost = hostname(website);
+
   const companyName =
     text(company.name) ||
     text(company.title) ||
     text(company.legal_name) ||
     websiteHost ||
     companyInput;
+
   const socialLinks = Object.entries(social)
     .filter(([, value]) => hasValue(value))
     .map(([label, value]) => ({ label: humanize(label), value }));
+
   const overviewData: RecordValue = {
     Description: company.description,
     Keywords: company.keywords,
@@ -338,11 +446,13 @@ export default function HomePage() {
     "Legal name": organization.legal_name,
     Founded: organization.founded,
   };
+
   const contactData: RecordValue = {
     Emails: contact.emails,
     Phones: contact.phones,
     Addresses: contact.addresses,
   };
+
   const websiteData: RecordValue = {
     Website: website,
     "Theme color": branding.theme_color,
@@ -351,6 +461,7 @@ export default function HomePage() {
     Robots: seo.robots,
     Sitemap: seo.sitemap,
   };
+
   function goHome() {
     window.history.pushState({}, "", "/");
     setSearched(false);
@@ -364,78 +475,120 @@ export default function HomePage() {
     setTab("Overview");
     setSidebarOpen(false);
   }
+
   async function runSearch(rawQuery: string) {
     const value = rawQuery.trim();
+
     if (!value || loading) return;
+
     setQuery(value);
     setCompanyInput(value);
     setError("");
     setResult(null);
     setActivityEvents([]);
+    setActivityOpen(false);
     setLoading(true);
     setSearched(true);
     setTab("Overview");
     setSidebarOpen(false);
     setElapsedMs(null);
     setEngineStatus("checking");
+
     startedAt.current = performance.now();
+
     // Keep the address bar clean: searches do not add a ?url=... parameter.
     window.history.pushState({}, "", "/");
+
     try {
       const response = await fetch("/api/extract-stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({ url: value }),
         cache: "no-store",
       });
+
       const data = await readSseResponse(response, (event) => {
         setActivityEvents((current) => [...current, event].slice(-40));
       });
+
       setResult(data);
       setEngineStatus("online");
       setCheckedAt(new Date().toLocaleString());
+
       setRecentSearches((current) => {
-        const updated = [value, ...current.filter((item) => item.toLowerCase() !== value.toLowerCase())].slice(0, 8);
+        const updated = [
+          value,
+          ...current.filter((item) => item.toLowerCase() !== value.toLowerCase()),
+        ].slice(0, 8);
+
         try {
           localStorage.setItem(RECENTS_KEY, JSON.stringify(updated));
         } catch {
           // Recent history is optional.
         }
+
         return updated;
       });
     } catch (caught) {
       setEngineStatus("error");
-      setError(caught instanceof Error ? caught.message : "We couldn't retrieve this company.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "We couldn't retrieve this company.",
+      );
     } finally {
       setElapsedMs(performance.now() - startedAt.current);
       setLoading(false);
     }
   }
+
   function renderTabContent() {
     if (!result) return null;
+
     if (tab === "Contacts") {
       return (
         <div className="content-grid">
           <div className="content-column">
-            <Section title="Public contact details"><FieldRows data={contactData} /></Section>
-            <Section title="Leadership"><PeopleList people={people} /></Section>
+            <Section title="Public contact details">
+              <FieldRows data={contactData} />
+            </Section>
+
+            <Section title="Leadership">
+              <PeopleList people={people} />
+            </Section>
           </div>
+
           <div className="content-column">
-            <Section title="Social profiles"><LinkRows links={socialLinks} /></Section>
-            <Section title="Organisation details"><FieldRows data={organization} /></Section>
+            <Section title="Social profiles">
+              <LinkRows links={socialLinks} />
+            </Section>
+
+            <Section title="Organisation details">
+              <FieldRows data={organization} />
+            </Section>
           </div>
         </div>
       );
     }
+
     if (tab === "Website & social") {
       return (
         <div className="content-grid">
           <div className="content-column">
-            <Section title="Website details"><FieldRows data={websiteData} /></Section>
+            <Section title="Website details">
+              <FieldRows data={websiteData} />
+            </Section>
+
             <Section title="Official links">
-              <LinkRows links={[{ label: "Website", value: website }, ...socialLinks]} />
+              <LinkRows
+                links={[{ label: "Website", value: website }, ...socialLinks]}
+              />
             </Section>
           </div>
+
           <div className="content-column">
             <Section title="Branding">
               <div className="branding-grid">
@@ -443,131 +596,267 @@ export default function HomePage() {
                   ["Logo", branding.logo_url],
                   ["Favicon", branding.favicon_url],
                   ["Apple icon", branding.apple_icon_url || branding.apple_touch_icon_url],
-                ].filter(([, value]) => hasValue(value)).map(([label, value]) => {
-                  const url = linkUrl(value);
-                  return (
-                    <div className="branding-item" key={String(label)}>
-                      <span>{String(label)}</span>
-                      {url ? <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={String(label)} /></a> : <span className="empty-note">Not returned</span>}
-                    </div>
-                  );
-                })}
+                ]
+                  .filter(([, value]) => hasValue(value))
+                  .map(([label, value]) => {
+                    const url = linkUrl(value);
+
+                    return (
+                      <div className="branding-item" key={String(label)}>
+                        <span>{String(label)}</span>
+
+                        {url ? (
+                          <a href={url} target="_blank" rel="noreferrer">
+                            <img src={url} alt={String(label)} />
+                          </a>
+                        ) : (
+                          <span className="empty-note">Not returned</span>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
+
               <FieldRows data={branding} />
+
               <div className="branding-fonts">
                 <h3>Primary fonts</h3>
-                {fontFamilies.length ? <p>{fontFamilies.map(displayValue).filter(Boolean).join(" · ")}</p> : <p className="empty-note">No primary fonts were detected.</p>}
+
+                {fontFamilies.length ? (
+                  <p>{fontFamilies.map(displayValue).filter(Boolean).join(" · ")}</p>
+                ) : (
+                  <p className="empty-note">No primary fonts were detected.</p>
+                )}
               </div>
             </Section>
           </div>
         </div>
       );
     }
+
     if (tab === "Technology") {
       return (
         <div className="content-grid">
           <div className="content-column">
             <Section title="Detected technologies">
               {technologies.length ? (
-                <ul className="technology-list">{technologies.map((technology, index) => <li key={`${displayValue(technology)}-${index}`}>{displayValue(technology)}</li>)}</ul>
-              ) : <p className="empty-note">No technology stack was returned.</p>}
+                <ul className="technology-list">
+                  {technologies.map((technology, index) => (
+                    <li key={`${displayValue(technology)}-${index}`}>
+                      {displayValue(technology)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-note">No technology stack was returned.</p>
+              )}
             </Section>
+
             <Section title="Page metadata">
-              <FieldRows data={{
-                Title: company.title,
-                Description: company.description,
-                Keywords: company.keywords,
-                Language: company.language,
-                "Canonical URL": company.canonical_url ?? seo.canonical_url ?? seo.canonical,
-                Generator: seo.generator ?? company.generator,
-              }} />
+              <FieldRows
+                data={{
+                  Title: company.title,
+                  Description: company.description,
+                  Keywords: company.keywords,
+                  Language: company.language,
+                  "Canonical URL":
+                    company.canonical_url ?? seo.canonical_url ?? seo.canonical,
+                  Generator: seo.generator ?? company.generator,
+                }}
+              />
             </Section>
+
             <Section title="Primary fonts">
               {fontFamilies.length ? (
-                <ul className="technology-list">{fontFamilies.map((font, index) => <li key={`${displayValue(font)}-${index}`}>{displayValue(font)}</li>)}</ul>
-              ) : <p className="empty-note">No primary fonts were detected.</p>}
+                <ul className="technology-list">
+                  {fontFamilies.map((font, index) => (
+                    <li key={`${displayValue(font)}-${index}`}>
+                      {displayValue(font)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-note">No primary fonts were detected.</p>
+              )}
             </Section>
           </div>
+
           <div className="content-column">
-            <Section title="SEO signals"><FieldRows data={{
-              Robots: seo.robots,
-              Sitemap: seo.sitemap,
-              "Open Graph title": openGraph.title,
-              "Open Graph description": openGraph.description,
-              "Open Graph image": openGraph.image_url ?? openGraph.image,
-              "Open Graph URL": openGraph.url,
-              "Twitter card type": twitterCard.card ?? seo.twitter_card_type,
-              "Twitter title": twitterCard.title,
-              "Twitter description": twitterCard.description,
-              "Twitter image": twitterCard.image_url ?? twitterCard.image,
-            }} /></Section>
+            <Section title="SEO signals">
+              <FieldRows
+                data={{
+                  Robots: seo.robots,
+                  Sitemap: seo.sitemap,
+                  "Open Graph title": openGraph.title,
+                  "Open Graph description": openGraph.description,
+                  "Open Graph image": openGraph.image_url ?? openGraph.image,
+                  "Open Graph URL": openGraph.url,
+                  "Twitter card type": twitterCard.card ?? seo.twitter_card_type,
+                  "Twitter title": twitterCard.title,
+                  "Twitter description": twitterCard.description,
+                  "Twitter image": twitterCard.image_url ?? twitterCard.image,
+                }}
+              />
+            </Section>
+
             <Section title="Other returned details">
-              <FieldRows data={Object.fromEntries(Object.entries(company).filter(([key]) =>
-                !["name", "title", "description", "keywords", "language", "contact", "social", "branding", "seo", "organization", "people", "technology_stack", "technologies", "canonical_url"].includes(key),
-              ))} />
+              <FieldRows
+                data={Object.fromEntries(
+                  Object.entries(company).filter(
+                    ([key]) =>
+                      ![
+                        "name",
+                        "title",
+                        "description",
+                        "keywords",
+                        "language",
+                        "contact",
+                        "social",
+                        "branding",
+                        "seo",
+                        "organization",
+                        "people",
+                        "technology_stack",
+                        "technologies",
+                        "canonical_url",
+                      ].includes(key),
+                  ),
+                )}
+              />
             </Section>
           </div>
         </div>
       );
     }
+
     return (
       <div className="content-grid">
         <div className="content-column">
           <Section title="Company overview">
-            <p className="company-description">{text(company.description) || "No company description was returned."}</p>
+            <p className="company-description">
+              {text(company.description) || "No company description was returned."}
+            </p>
+
             <FieldRows data={overviewData} />
           </Section>
-          <Section title="Official links"><LinkRows links={[{ label: "Website", value: website }, ...socialLinks]} /></Section>
-          <Section title="Leadership"><PeopleList people={people} /></Section>
+
+          <Section title="Official links">
+            <LinkRows
+              links={[{ label: "Website", value: website }, ...socialLinks]}
+            />
+          </Section>
+
+          <Section title="Leadership">
+            <PeopleList people={people} />
+          </Section>
         </div>
+
         <div className="content-column">
-          <Section title="Public contact details"><FieldRows data={contactData} /></Section>
-          <Section title="Website signals"><FieldRows data={{
-            Language: company.language,
-            Generator: seo.generator ?? company.generator,
-            "Technology stack": technologies,
-            "Theme color": branding.theme_color,
-          }} /></Section>
-          <Section title="Branding"><FieldRows data={branding} /></Section>
+          <Section title="Public contact details">
+            <FieldRows data={contactData} />
+          </Section>
+
+          <Section title="Website signals">
+            <FieldRows
+              data={{
+                Language: company.language,
+                Generator: seo.generator ?? company.generator,
+                "Technology stack": technologies,
+                "Theme color": branding.theme_color,
+              }}
+            />
+          </Section>
+
+          <Section title="Branding">
+            <FieldRows data={branding} />
+          </Section>
         </div>
       </div>
     );
   }
-const displayedElapsedMs = loading ? liveElapsedMs : elapsedMs;
-const elapsedLabel =
-  displayedElapsedMs === null
-    ? ""
-    : (() => {
-        const totalSeconds = Math.floor(displayedElapsedMs / 1000);
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        return `${String(minutes).padStart(2, "0")}:${String(
-          seconds
-        ).padStart(2, "0")}`;
-      })();
+
+  const displayedElapsedMs = loading ? liveElapsedMs : elapsedMs;
+
+  const elapsedLabel =
+    displayedElapsedMs === null
+      ? ""
+      : (() => {
+          const totalSeconds = Math.floor(displayedElapsedMs / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+
+          return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+        })();
+
+  // Show the latest real engine activity, or the connection status before
+  // the first activity event arrives.
+  const loadingMessage =
+    activityEvents.length > 0
+      ? activityEvents[activityEvents.length - 1].message
+      : "Connecting to PageGoat engine…";
+
   return (
     <main className={`site-shell ${searched ? "results-shell" : "home-shell"}`}>
       <header className="site-header">
-        <a className="wordmark" href="/" onClick={(event) => { event.preventDefault(); goHome(); }} aria-label="Welookit homepage">
-          <span className="brand-icon"><Search size={19} strokeWidth={3.2} /></span>
+        <a
+          className="wordmark"
+          href="/"
+          onClick={(event) => {
+            event.preventDefault();
+            goHome();
+          }}
+          aria-label="Welookit homepage"
+        >
+          <span className="brand-icon">
+            <Search size={19} strokeWidth={3.2} />
+          </span>
           <span>welookit</span>
         </a>
+
         {searched && (
-          <form className="header-search" onSubmit={(event) => { event.preventDefault(); void runSearch(query); }}>
-            <input ref={inputRef} aria-label="Look up a company" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Company name or website" />
-            <button type="submit" disabled={loading || !query.trim()} aria-label="Look it up">
-              {loading ? <Loader className="spin" size={17} /> : <Search size={17} />}
+          <form
+            className="header-search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void runSearch(query);
+            }}
+          >
+            <input
+              ref={inputRef}
+              aria-label="Look up a company"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Company name or website"
+            />
+
+            <button
+              type="submit"
+              disabled={loading || !query.trim()}
+              aria-label="Look it up"
+            >
+              {loading ? (
+                <Loader className="spin" size={17} />
+              ) : (
+                <Search size={17} />
+              )}
             </button>
           </form>
         )}
-        <button className="header-menu-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open menu" aria-expanded={sidebarOpen}>
+
+        <button
+          className="header-menu-button"
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={sidebarOpen}
+        >
           <Menu size={21} />
         </button>
       </header>
+
       {!searched ? (
         <>
           <section className="hero">
-            {/* <div className="hero-mark"><Search size={27} strokeWidth={2} /></div> */}
             <div className="hero-mark">
               <video
                 src="/otter-commuting.webm"
@@ -577,182 +866,309 @@ const elapsedLabel =
                 aria-hidden="true"
               />
             </div>
+
             <h1>Find what&apos;s in-site, Fast.</h1>
             <p className="hero-copy">Inspect any company or website.</p>
-            <form className="search-form" onSubmit={(event) => { event.preventDefault(); void runSearch(query); }}>
+
+            <form
+              className="search-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runSearch(query);
+              }}
+            >
               <Search className="search-symbol" size={19} aria-hidden="true" />
-              <input aria-label="Company name or website" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Enter company name or website" autoComplete="off" />
+
+              <input
+                aria-label="Company name or website"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Enter company name or website"
+                autoComplete="off"
+              />
+
               <button type="submit" disabled={loading || !query.trim()}>
-                {loading ? <><Loader size={16} className="spin" /> Looking</> : "Look it up"}
+                {loading ? (
+                  <>
+                    <Loader size={16} className="spin" /> Looking
+                  </>
+                ) : (
+                  "Look it up"
+                )}
               </button>
             </form>
+
             <div className="example-searches">
               <span>Try</span>
+
               {EXAMPLES.map((example) => (
-                <button key={example} type="button" onClick={() => { setQuery(example); void runSearch(example); }}>{example}</button>
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => {
+                    setQuery(example);
+                    void runSearch(example);
+                  }}
+                >
+                  {example}
+                </button>
               ))}
             </div>
-            {error && <p className="home-error" role="alert">{error}</p>}
-            <p className="privacy-note">All public information. One quick search. Free until Dec &apos;27.</p>
+
+            {error && (
+              <p className="home-error" role="alert">
+                {error}
+              </p>
+            )}
+
+            <p className="privacy-note">
+              All public information. One quick search. Free until Dec &apos;27.
+            </p>
           </section>
+
           <section className="what-you-find">
             <h2>What you can find</h2>
+
             <div className="feature-grid">
-              <article className="feature"><span className="feature-icon"><Building2 size={18} /></span><h3>Company essentials</h3><p>Official website, about the company and key public information in one place.</p></article>
-              <article className="feature"><span className="feature-icon"><Activity size={18} /></span><h3>Public contacts</h3><p>Emails, phone numbers and locations when available.</p></article>
-              <article className="feature"><span className="feature-icon"><ArrowUpRight size={18} /></span><h3>Online presence</h3><p>Social profiles, website details and detected technologies.</p></article>
+              <article className="feature">
+                <span className="feature-icon">
+                  <Building2 size={18} />
+                </span>
+                <h3>Company essentials</h3>
+                <p>
+                  Official website, about the company and key public information in one place.
+                </p>
+              </article>
+
+              <article className="feature">
+                <span className="feature-icon">
+                  <Activity size={18} />
+                </span>
+                <h3>Public contacts</h3>
+                <p>Emails, phone numbers and locations when available.</p>
+              </article>
+
+              <article className="feature">
+                <span className="feature-icon">
+                  <ArrowUpRight size={18} />
+                </span>
+                <h3>Online presence</h3>
+                <p>Social profiles, website details and detected technologies.</p>
+              </article>
             </div>
           </section>
         </>
       ) : (
         <div className="results-main">
-          {/* <div className="results-toolbar">
-            <button className="back-home" type="button" onClick={goHome}><Home size={15} /> Homepage</button>
-            <span className="search-duration">
-              <Clock3 size={14} />
-              {loading
-                ? `Looking - ${elapsedLabel || "0 ms"}`
-                : elapsedLabel
-                  ? `Looked up in ${elapsedLabel}`
-                  : "Ready"}
-            </span>
-          </div> */}
           <section className="company-heading">
             <div className="company-title-row">
-              <div className="company-avatar"><Building2 size={24} /></div>
+              <div className="company-avatar">
+                <Building2 size={24} />
+              </div>
+
               <div className="company-title-copy">
                 <h1>{result ? companyName : companyInput}</h1>
-                {website && <a className="company-domain" href={normalizeUrl(website)} target="_blank" rel="noreferrer">{websiteHost} <ArrowUpRight size={13} /></a>}
+
+                {website && (
+                  <a
+                    className="company-domain"
+                    href={normalizeUrl(website)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {websiteHost} <ArrowUpRight size={13} />
+                  </a>
+                )}
               </div>
-              {result && website && <a className="visit-button" href={normalizeUrl(website)} target="_blank" rel="noreferrer">Visit website <ArrowUpRight size={14} /></a>}
+
+              {result && website && (
+                <a
+                  className="visit-button"
+                  href={normalizeUrl(website)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Visit website <ArrowUpRight size={14} />
+                </a>
+              )}
             </div>
+
             <p className="checked-status">
-              <span className={`status-dot ${loading ? "is-loading" : error ? "is-error" : result ? "is-online" : ""}`} />
-              {loading ? "Looking for public information" : error ? "Lookup could not be completed" : result ? `Checked at ${checkedAt || "just now"}` : "Preparing lookup"}
+              <span
+                className={`status-dot ${
+                  loading
+                    ? "is-loading"
+                    : error
+                      ? "is-error"
+                      : result
+                        ? "is-online"
+                        : ""
+                }`}
+              />
+
+              {loading
+                ? "Looking for public information"
+                : error
+                  ? "Lookup could not be completed"
+                  : result
+                    ? `Checked at ${checkedAt || "just now"}`
+                    : "Preparing lookup"}
             </p>
           </section>
+
           {loading && (
             <div className="loading-panel" role="status" aria-live="polite">
               <span className="loading-line" />
+
               <div className="loading-row">
                 <p className="loading-message">
                   <Loader size={16} className="spin" />
-                  <span>Inspecting available data sources…</span>
+                  <span>{loadingMessage}</span>
                 </p>
-                <span className="search-duration" aria-label={`Elapsed time: ${elapsedLabel || "0 ms"}`}>
-                  {elapsedLabel || "0 ms"}
+
+                <span
+                  className="search-duration"
+                  aria-label={`Elapsed time: ${elapsedLabel || "0 ms"}`}
+                >
+                  {elapsedLabel || "00:00"}
                 </span>
               </div>
             </div>
           )}
-            
 
-{activityEvents.length > 0 && (
-  <section
-    className={`activity-panel ${loading ? "is-live" : "is-complete"}`}
-    aria-label="Engine activity"
-    aria-live="polite"
-  >
-    <div
-      className="activity-heading"
-      role="button"
-      tabIndex={0}
-      onClick={() => setActivityOpen((open) => !open)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          setActivityOpen((open) => !open);
-        }
-      }}
-      aria-expanded={activityOpen}
-    >
-      <span className="activity-heading-title">
-        ENGINE ACTIVITY
-      </span>
+          {activityEvents.length > 0 && (
+            <section
+              className={`activity-panel ${loading ? "is-live" : "is-complete"}`}
+              aria-label="Engine activity"
+              aria-live="polite"
+            >
+              <div
+                className="activity-heading"
+                role="button"
+                tabIndex={0}
+                onClick={() => setActivityOpen((open) => !open)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setActivityOpen((open) => !open);
+                  }
+                }}
+                aria-expanded={activityOpen}
+              >
+                <span className="activity-heading-title">ENGINE ACTIVITY</span>
 
-      <span className="activity-heading-meta">
-        <span className="activity-status">
-          {loading ? "PROCESSING" : "COMPLETED"}
-        </span>
+                <span className="activity-heading-meta">
+                  <span className="activity-status">
+                    {loading ? "PROCESSING" : "COMPLETED"}
+                  </span>
 
-        <span className="activity-count">
-          {activityEvents.length}
-        </span>
+                  <span className="activity-count">{activityEvents.length}</span>
 
-        <span className="activity-toggle-icon" aria-hidden="true">
-          {activityOpen ? (
-            <ChevronUp size={16} />
-          ) : (
-            <ChevronDown size={16} />
-          )}
-        </span>
-      </span>
-    </div>
-
-    {activityOpen && (
-      <ol className="activity-list">
-        {[...activityEvents].reverse().map((item, index) => (
-          <li
-            className={`activity-item ${
-              loading && index === 0 ? "is-current is-new" : ""
-            }`}
-            key={`${item.type}-${index}`}
-          >
-            <span className="activity-marker" aria-hidden="true" />
-
-            <div className="activity-copy">
-              <span className="activity-type">
-                {humanize(item.type)}
-              </span>
-
-              <p className="activity-message">{item.message}</p>
-
-              {item.url && item.url !== website && (
-                <span className="activity-url" title={item.url}>
-                  {item.url}
+                  <span className="activity-toggle-icon" aria-hidden="true">
+                    {activityOpen ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </span>
                 </span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-    )}
-  </section>
-)}
+              </div>
 
-            
-          {error && !loading && <div className="error-panel" role="alert"><h2>We couldn’t retrieve this company</h2><p>{error}</p><button className="outline-button" onClick={() => void runSearch(companyInput)}>Try again</button></div>}
+              {activityOpen && (
+                <ol className="activity-list">
+                  {[...activityEvents].reverse().map((item, index) => (
+                    <li
+                      className={`activity-item ${
+                        loading && index === 0 ? "is-current is-new" : ""
+                      }`}
+                      key={`${item.type}-${index}`}
+                    >
+                      <span className="activity-marker" aria-hidden="true" />
+
+                      <div className="activity-copy">
+                        <span className="activity-type">
+                          {humanize(item.type)}
+                        </span>
+
+                        <p className="activity-message">{item.message}</p>
+
+                        {item.url && item.url !== website && (
+                          <span className="activity-url" title={item.url}>
+                            {item.url}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
+
+          {error && !loading && (
+            <div className="error-panel" role="alert">
+              <h2>We couldn’t retrieve this company</h2>
+              <p>{error}</p>
+              <button
+                className="outline-button"
+                onClick={() => void runSearch(companyInput)}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
           {result && !loading && (
             <>
               <nav className="tabs" aria-label="Company information categories">
-                {TABS.map((item) => <button key={item} type="button" className={`tab-button ${tab === item ? "active" : ""}`} onClick={() => setTab(item)}>{item}</button>)}
+                {TABS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`tab-button ${tab === item ? "active" : ""}`}
+                    onClick={() => setTab(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
               </nav>
+
               <section className="results-content">{renderTabContent()}</section>
+
               <div className="result-bottom-bar">
-                <span><Clock3 size={14} /> Lookup completed in {elapsedLabel}</span>
-                <button className="outline-button" onClick={() => {
-                  const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
-                  const href = URL.createObjectURL(blob);
-                  const anchor = document.createElement("a");
-                  anchor.href = href;
-                  anchor.download = `${websiteHost || "company"}-welookit.json`;
-                  anchor.click();
-                  URL.revokeObjectURL(href);
-                }}>Export data (.json)</button>
-                <button className="home-result-button" onClick={goHome}><Home size={15} /> Homepage</button>
+                <span>
+                  <Clock3 size={14} /> Lookup completed in {elapsedLabel}
+                </span>
+
+                <button
+                  className="outline-button"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(result, null, 2)], {
+                      type: "application/json",
+                    });
+
+                    const href = URL.createObjectURL(blob);
+                    const anchor = document.createElement("a");
+
+                    anchor.href = href;
+                    anchor.download = `${websiteHost || "company"}-welookit.json`;
+                    anchor.click();
+
+                    URL.revokeObjectURL(href);
+                  }}
+                >
+                  Export data (.json)
+                </button>
+
+                <button className="home-result-button" onClick={goHome}>
+                  <Home size={15} /> Homepage
+                </button>
               </div>
             </>
           )}
         </div>
       )}
-      {/* <footer className={`site-footer ${searched ? "results-footer" : ""}`}>
-        <span>welookit - company intelligence discovery</span>
-        <nav aria-label="Footer">
-          <a href="/about">About</a>
-          <a href="/contact">Contact</a>
-          <a href="/terms">Terms</a>
-        </nav>
-      </footer> */}
+
       <button
         className={`drawer-backdrop ${sidebarOpen ? "is-open" : ""}`}
         aria-label="Close menu"
@@ -760,6 +1176,7 @@ const elapsedLabel =
         tabIndex={sidebarOpen ? 0 : -1}
         onClick={() => setSidebarOpen(false)}
       />
+
       <aside
         className={`sidebar-drawer ${sidebarOpen ? "is-open" : ""}`}
         aria-label="Welookit menu"
@@ -768,36 +1185,129 @@ const elapsedLabel =
         aria-modal={sidebarOpen}
       >
         <div className="drawer-header">
-          <div><span className="drawer-kicker">WELOOKIT</span><h2>Quick menu</h2></div>
-          <button className="drawer-close" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close menu" tabIndex={sidebarOpen ? 0 : -1}><X size={19} /></button>
+          <div>
+            <span className="drawer-kicker">WELOOKIT</span>
+            <h2>Quick menu</h2>
+          </div>
+
+          <button
+            className="drawer-close"
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+            tabIndex={sidebarOpen ? 0 : -1}
+          >
+            <X size={19} />
+          </button>
         </div>
+
         <section className="drawer-section">
           <h3>Navigation</h3>
+
           <div className="drawer-links">
-            <button type="button" onClick={goHome} tabIndex={sidebarOpen ? 0 : -1}><Home size={15} /> Homepage</button>
-            <a href="/about" tabIndex={sidebarOpen ? 0 : -1}>About</a>
-            <a href="/engine" tabIndex={sidebarOpen ? 0 : -1}>Engine</a>
-            <a href="/contact" tabIndex={sidebarOpen ? 0 : -1}>Contact</a>
-            <a href="/terms" tabIndex={sidebarOpen ? 0 : -1}>Terms</a>
+            <button
+              type="button"
+              onClick={goHome}
+              tabIndex={sidebarOpen ? 0 : -1}
+            >
+              <Home size={15} /> Homepage
+            </button>
+
+            <a href="/about" tabIndex={sidebarOpen ? 0 : -1}>
+              About
+            </a>
+            <a href="/engine" tabIndex={sidebarOpen ? 0 : -1}>
+              Engine
+            </a>
+            <a href="/contact" tabIndex={sidebarOpen ? 0 : -1}>
+              Contact
+            </a>
+            <a href="/terms" tabIndex={sidebarOpen ? 0 : -1}>
+              Terms
+            </a>
           </div>
         </section>
+
         <section className="drawer-section">
           <h3>Recent lookups</h3>
+
           {recentSearches.length ? (
-            <div className="drawer-recent-searches">{recentSearches.map((item) => <button key={item} type="button" tabIndex={sidebarOpen ? 0 : -1} onClick={() => { setQuery(item); void runSearch(item); }}>{item}<ArrowUpRight size={13} /></button>)}</div>
-          ) : <p>Your recent lookups will appear here.</p>}
+            <div className="drawer-recent-searches">
+              {recentSearches.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  tabIndex={sidebarOpen ? 0 : -1}
+                  onClick={() => {
+                    setQuery(item);
+                    void runSearch(item);
+                  }}
+                >
+                  {item} <ArrowUpRight size={13} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p>Your recent lookups will appear here.</p>
+          )}
         </section>
+
         <section className="drawer-section">
           <h3>Engine status</h3>
-          <div className="drawer-status"><span className={`drawer-status-dot ${engineStatus === "online" ? "is-online" : engineStatus === "error" ? "is-error" : engineStatus === "checking" ? "is-checking" : ""}`} />{engineStatus === "online" ? "Last lookup completed" : engineStatus === "error" ? "Last lookup failed" : engineStatus === "checking" ? "Lookup in progress" : "Not checked this session"}</div>
+
+          <div className="drawer-status">
+            <span
+              className={`drawer-status-dot ${
+                engineStatus === "online"
+                  ? "is-online"
+                  : engineStatus === "error"
+                    ? "is-error"
+                    : engineStatus === "checking"
+                      ? "is-checking"
+                      : ""
+              }`}
+            />
+
+            {engineStatus === "online"
+              ? "Last lookup completed"
+              : engineStatus === "error"
+                ? "Last lookup failed"
+                : engineStatus === "checking"
+                  ? "Lookup in progress"
+                  : "Not checked this session"}
+          </div>
+
           <p>Response time: {elapsedLabel || "Not available yet"}</p>
           <p>Network uptime: Not currently measured</p>
-          <p className="drawer-note">Status reflects this browser session. Live service uptime requires a dedicated health endpoint.</p>
+
+          <p className="drawer-note">
+            Status reflects this browser session. Live service uptime requires a dedicated health endpoint.
+          </p>
         </section>
+
         <section className="drawer-section">
-          <h3>Data & privacy</h3>
-          <p>Lookups use public information returned by the Welookit extraction service. Recent searches are stored in this browser only.</p>
-          <button className="clear-history" type="button" tabIndex={sidebarOpen ? 0 : -1} onClick={() => { setRecentSearches([]); try { localStorage.removeItem(RECENTS_KEY); } catch {} }}>Clear recent lookups</button>
+          <h3>Data &amp; privacy</h3>
+
+          <p>
+            Lookups use public information returned by the Welookit extraction service. Recent searches are stored in this browser only.
+          </p>
+
+          <button
+            className="clear-history"
+            type="button"
+            tabIndex={sidebarOpen ? 0 : -1}
+            onClick={() => {
+              setRecentSearches([]);
+
+              try {
+                localStorage.removeItem(RECENTS_KEY);
+              } catch {
+                // Clearing browser history is optional.
+              }
+            }}
+          >
+            Clear recent lookups
+          </button>
         </section>
       </aside>
     </main>
