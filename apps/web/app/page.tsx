@@ -15,6 +15,11 @@ import {
   Menu,
   Search,
   X,
+  Target,
+  Galaxy,
+  User,
+  CircleUserRound,
+  GlobeCheck,
 } from "lucide-react";
 
 type RecordValue = Record<string, unknown>;
@@ -125,7 +130,7 @@ async function readSseResponse(
 }
 
 const TABS: Tab[] = ["Overview", "Contacts", "Website & social", "Technology"];
-const EXAMPLES = ["Infosys", "Siemens", "Accenture", "Medtronic"];
+const EXAMPLES = ["Tatapower", "Siemens", "Accenture", "Dentsu"];
 const RECENTS_KEY = "welookit-recent-searches";
 
 function isRecord(value: unknown): value is RecordValue {
@@ -307,15 +312,15 @@ function PeopleList({ people }: { people: unknown[] }) {
 
             <FieldRows data={details} />
 
-{evidence && (
-  <details className="person-evidence">
-    <summary>
-      <span className="show-evidence">Show evidence</span>
-      <span className="hide-evidence">Hide evidence</span>
-    </summary>
-    <p>{evidence}</p>
-  </details>
-)}
+            {evidence && (
+              <details className="person-evidence">
+                <summary>
+                  <span className="show-evidence">Show evidence</span>
+                  <span className="hide-evidence">Hide evidence</span>
+                </summary>
+                <p>{evidence}</p>
+              </details>
+            )}
           </article>
         );
       })}
@@ -811,7 +816,7 @@ export default function HomePage() {
           aria-label="Welookit homepage"
         >
           <span className="brand-icon">
-            <Search size={19} strokeWidth={3.2} />
+            <Galaxy size={20} strokeWidth={2} />
           </span>
           <span>welookit</span>
         </a>
@@ -861,13 +866,16 @@ export default function HomePage() {
         <>
           <section className="hero">
             <div className="hero-mark">
-              <video
-                src="/otter-commuting.webm"
-                autoPlay
-                muted
-                playsInline
-                aria-hidden="true"
-              />
+            <img
+              src="/otter-stand-cropped.svg"
+              alt=""
+              aria-hidden="true"
+               style={{
+                width: "76px",
+                height: "76px",
+                objectFit: "contain",
+              }}
+            />
             </div>
 
             <h1>Find what&apos;s in-site, Fast.</h1>
@@ -945,7 +953,7 @@ export default function HomePage() {
 
               <article className="feature">
                 <span className="feature-icon">
-                  <Activity size={18} />
+                  <CircleUserRound size={18} />
                 </span>
                 <h3>Public contacts</h3>
                 <p>Emails, phone numbers and locations when available.</p>
@@ -953,11 +961,31 @@ export default function HomePage() {
 
               <article className="feature">
                 <span className="feature-icon">
-                  <ArrowUpRight size={18} />
+                  <GlobeCheck size={18} />
                 </span>
                 <h3>Online presence</h3>
                 <p>Social profiles, website details and detected technologies.</p>
               </article>
+            </div>
+
+            <div className="technology-note">
+              <p>
+                <span className="technology-note-label">UNDER THE HOOD</span>
+                  <span className="technology-note-copy">
+                    Powered by a proprietary C-based extraction engine, welookit combines
+                    open-source software, cloud computing, network infrastructure and
+                    modern web technologies to discover, process and organise company
+                    intelligence in one place. This website uses{" "}
+                    <a
+                      href="https://www.cloudflare.com/products/tunnel/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Cloudflare Tunnel
+                    </a>{" "}
+                    for seamless engine connectivity and security.
+                  </span>
+              </p>
             </div>
           </section>
         </>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, Target } from "lucide-react";
 
 export default function ContactPage() {
   const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
@@ -7,7 +7,7 @@ export default function ContactPage() {
     <main className="site-shell info-shell">
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Welookit homepage">
-          <span className="brand-icon"><Building2 size={19} strokeWidth={2.2} /></span><span>welookit</span>
+          <span className="brand-icon"><Target size={20} strokeWidth={2} /></span><span>welookit</span>
         </Link>
         <Link className="info-back" href="/"><ArrowLeft size={15} /> Homepage</Link>
       </header>

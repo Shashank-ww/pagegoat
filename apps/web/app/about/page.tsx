@@ -1,6 +1,6 @@
-
+﻿
 import Link from "next/link";
-import { ArrowLeft, Building2, Cpu, Search, Workflow } from "lucide-react";
+import { ArrowLeft, Building2, Cpu, Search, Target, Workflow } from "lucide-react";
 
 export default function AboutPage() {
   return (
@@ -8,7 +8,7 @@ export default function AboutPage() {
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Welookit homepage">
           <span className="brand-icon">
-            <Building2 size={19} strokeWidth={2.2} />
+            <Target size={20} strokeWidth={2} />
           </span>
           <span>welookit</span>
         </Link>
@@ -21,31 +21,27 @@ export default function AboutPage() {
       <article className="info-content">
         <p className="eyebrow">WELOOKIT / ABOUT</p>
 
-        <h1>The web has the answers. <br/> Finding it, is the work.</h1>
+        <h1>The web has the answers. <br/> Finding it is the work.</h1>
 
         <p className="info-intro">
-          Welookit started as a hobby project with a simple idea:
-          looking up a company should not mean opening 30 multiple tabs and piecing together information that is already out there.
+          Welookit started as a hobby project with a simple idea: looking up a company should not mean opening 30 multiple tabs to find information that is already out there.
         </p>
 
         <section className="info-section">
           <h2>A small idea, taken seriously</h2>
           <p>
-            It began with a most common problem. You come across a company
-            and want to know more about it. Its website, contact details,
-            social profiles, the technology it uses, and some
-            other useful details that help you understand what it does or is.
+           It began with a most common problem. You come across a company and want to know more about it.
+           Its website, contact details, social profiles, the technology it uses, and other useful details
+           that help you understand what it does or is.
           </p>
           <p>
-            The information is available, often hidden, and finding it takes time.
-            Moving between websites, opening page after page, and putting the
-            information together yourself.
+            The information is available, often hidden, and finding it takes time and effort.
+            Moving between websites, opening page after page, and putting the information together yourself.
           </p>
           <p>
-            I started wondering whether that repetitive work could be
-            handled by a small, purpose-built programme instead. Something
-            straightforward to use on the outside, with the engineering
-            doing the hard work underneath. Yes, you can do it with AI. Good luck with that!
+            I started wondering whether that repetitive work could be handled by a small, purpose-built programme instead.
+            Something straightforward to use on the outside, with the machines doing the hard work underneath.
+            Yes, you can also do it with AI. Good luck with that, Mr Datasaurus!
           </p>
           <p>
             That experiment became the core thought behind {" "}
@@ -54,51 +50,50 @@ export default function AboutPage() {
             </a>
           </p>
           <p>
-            I was using this in my own research for my internal projects, 
-            when my colleagues started asking for it's link.
+            I was using this as a CLI tool for my own research in my internal projects,
+            that&apos;s when my colleagues started asking for its link
           </p>
         </section>
 
         <section className="info-section">
           <h2>Start with the source</h2>
           <p>
-            The internet is no dearth of information. What is often
-            missing is a simple way to get to the relevant source without
-            doing all the manual work yourself.
+            The internet is no dearth of information.
+            What is often missing is a simple way to get to the relevant source
+            without digging too much or doing all the manual work overtime.
           </p>
           <p>
-            Welookit takes a company name or website and works towards
-            a useful, structured view of the information its accessible
-            web pages reveal. Including page details, public
-            contact information, social links, website metadata and
-            detected technologies. Basically, all publicly available information, hidden in plain sight.
+            Welookit takes a company name or website and works towards a useful,
+            structured view of the information its accessible web pages reveal.
+            Including page details, public contact information,
+            social links, website metadata and detected technologies.
+            Basically, all publicly available information, hidden in plain sight.
           </p>
           <p>
-            It is not a directory or company registry, and it does not claim to know
-            everything about a business. It is a way to start exploring
-            what is actually available on the web for its audience.
+            It is not an online directory or company registry,
+            and it does not claim to know everything about a business.
+            It is a way to start exploring what is actually available on the web.
           </p>
         </section>
 
         <section className="info-section">
-          <h2>Good tools do not need to be complicated</h2>
+          <h2>Good tools are simple</h2>
           <p>
-            We made the experience deliberately simple. Enter a company,
-            inspect the results, and decide what is useful to you.
-            There is no need to learn a new AI workflow just to find
-            basic information.
+            We made the search experience deliberately simple.
+            Enter a company, inspect the results, and decide what is useful to you.
+            There is no need to learn a new AI workflow just to find basic information.
           </p>
           <p>
             Behind that simplicity is a <b>native engine written in C. </b>
-            It is a selective choice to build the underlying mechanism for the task
-            rather than making an AI model responsible for every step.
+             It is a selective choice to build the underlying mechanism for the task
+             rather than making multiple apps responsible at every step.
           </p>
           <p>
             While AI has a place in the future of information discovery.
             It can help explain, connect and interpret information.
-            But there is also value in retrieving the original source
-            and extracting its contents directly. We want to make
-            that foundation useful in its own right. Unlike fabricating results with AI and charge hefty tokens.
+            But there is also value in retrieving the original source and extracting its contents directly.
+            We want to make that foundation useful in its own right.
+            Without fabricating results with AI and hefty tokens.
           </p>
         </section>
 
