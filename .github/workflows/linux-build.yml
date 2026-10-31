@@ -70,6 +70,19 @@ jobs:
 
           ssh-keygen -y -f ~/.ssh/pagegoat_deploy > /dev/null
 
+      - name: Debug SSH configuration
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          echo "Deploy host: $HOST"
+          echo "Deploy port: $PORT"
+          echo "Known hosts entry:"
+          printf '%s\n' "$KNOWN_HOSTS" | sed -E 's/(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) .*/\1 [PUBLIC KEY HIDDEN]/'
+          echo "Known hosts file:"
+          cat ~/.ssh/known_hosts | sed -E 's/(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) .*/\1 [PUBLIC KEY HIDDEN]/'
+
       - name: Test SSH connection
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
