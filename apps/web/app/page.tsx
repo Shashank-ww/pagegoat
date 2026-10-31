@@ -307,12 +307,15 @@ function PeopleList({ people }: { people: unknown[] }) {
 
             <FieldRows data={details} />
 
-            {evidence && (
-              <details className="person-evidence">
-                <summary>Evidence</summary>
-                <p>{evidence}</p>
-              </details>
-            )}
+{evidence && (
+  <details className="person-evidence">
+    <summary>
+      <span className="show-evidence">Show evidence</span>
+      <span className="hide-evidence">Hide evidence</span>
+    </summary>
+    <p>{evidence}</p>
+  </details>
+)}
           </article>
         );
       })}
@@ -793,7 +796,7 @@ export default function HomePage() {
   const loadingMessage =
     activityEvents.length > 0
       ? activityEvents[activityEvents.length - 1].message
-      : "Connecting to PageGoat engine…";
+      : "Connecting to welookit engine…";
 
   return (
     <main className={`site-shell ${searched ? "results-shell" : "home-shell"}`}>
