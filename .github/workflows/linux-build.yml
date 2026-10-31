@@ -54,21 +54,35 @@ jobs:
           path: build-linux/pagegoat-service
           retention-days: 7
 
+     
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
           printf '%s\n' "$SSH_KEY" > ~/.ssh/pagegoat_deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-
           chmod 600 ~/.ssh/pagegoat_deploy
+
+          HOST_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOOmBiPumPZpFM1gYvq6ltaoV0tKt2O2sWmJlfKOrq2F"
+
+          if [ "$PORT" = "22" ]; then
+            printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
+          else
+            printf '[%s]:%s %s\n' "$HOST" "$PORT" "$HOST_KEY" > ~/.ssh/known_hosts
+          fi
+
           chmod 600 ~/.ssh/known_hosts
 
           ssh-keygen -y -f ~/.ssh/pagegoat_deploy > /dev/null
+
+          ssh-keygen -lf ~/.ssh/known_hosts | grep -F \
+            "SHA256:FhZkvmLb7fFq55PYFubSd4hgN6jVmV4GMyHPeLl/Fuw"
 
       - name: Debug SSH configuration
         env:
