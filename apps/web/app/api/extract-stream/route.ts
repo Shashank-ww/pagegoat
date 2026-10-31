@@ -7,6 +7,8 @@ const ENGINE_URL =
   process.env.PAGEGOAT_ENGINE_URL?.trim() || "http://127.0.0.1:8787";
 const ENGINE_TIMEOUT_MS = 204_000;
 
+const ENGINE_SECRET = process.env.PAGEGOAT_ENGINE_SECRET?.trim();
+
 function getErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const data = payload as Record<string, unknown>;
@@ -37,12 +39,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter a company website or domain." }, { status: 400 });
   }
 
+  if (!ENGINE_SECRET) {
+  return NextResponse.json(
+    { error: "Engine authentication is not configured." },
+    { status: 500 }
+  );
+}
   try {
     const upstream = await fetch(`${ENGINE_URL.replace(/\/+$/, "")}/extract-stream`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        "X-PageGoat-Secret": ENGINE_SECRET || "",
       },
       body: JSON.stringify({ url: url.trim() }),
       cache: "no-store",

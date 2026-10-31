@@ -10,6 +10,8 @@ const ENGINE_URL =
 
 const ENGINE_TIMEOUT_MS = 204_000;
 
+const ENGINE_SECRET = process.env.PAGEGOAT_ENGINE_SECRET?.trim();
+
 function getErrorMessage(payload: unknown): string | null {
   if (
     !payload ||
@@ -76,6 +78,7 @@ export async function POST(request: Request) {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "X-PageGoat-Secret": ENGINE_SECRET || "",
         },
         body: JSON.stringify({ url: url.trim() }),
         cache: "no-store",
