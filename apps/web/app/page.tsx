@@ -935,16 +935,16 @@ export default function HomePage() {
           </section>
 
           <section className="what-you-find">
-            <h2>What you can find</h2>
+            <h2>Get company information in one place</h2>
 
             <div className="feature-grid">
               <article className="feature">
                 <span className="feature-icon">
                   <Building2 size={18} />
                 </span>
-                <h3>Company essentials</h3>
+                <h3>Company Intelligence</h3>
                 <p>
-                  Official website, about the company and key public information in one place.
+                  Explore company names, official websites, descriptions, organisation details and other publicly available information.
                 </p>
               </article>
 
@@ -952,16 +952,19 @@ export default function HomePage() {
                 <span className="feature-icon">
                   <CircleUserRound size={18} />
                 </span>
-                <h3>Public contacts</h3>
-                <p>Emails, phone numbers and locations when available.</p>
+                <h3>Public Leadership Contacts</h3>
+                <p>
+                  Find publicly listed emails, phone numbers, 
+                  leadership information and professional contact details when available.
+                </p>
               </article>
 
               <article className="feature">
                 <span className="feature-icon">
                   <GlobeCheck size={18} />
                 </span>
-                <h3>Online presence</h3>
-                <p>Social profiles, website details and detected technologies.</p>
+                <h3>Technology Stack Research</h3>
+                <p>Explore social profiles, website metadata, branding details and detected technologies.</p>
               </article>
             </div>
 
@@ -969,10 +972,10 @@ export default function HomePage() {
               <p>
                 <span className="technology-note-label">UNDER THE HOOD</span>
                   <span className="technology-note-copy">
-                    Powered by a proprietary C-based extraction engine, welookit combines
-                    open-source software, cloud computing, virtual network infrastructure 
-                    and modern web technologies to find, process and organise publicly available company
-                    intelligence or web page data in one place.
+                    Welookit is powered by a proprietary C-based extraction engine.
+                    It processes publicly available website information and organises
+                    company intelligence, contact details, website metadata and
+                    technology signals into a structured view.
                   </span>
               </p>
             </div>
