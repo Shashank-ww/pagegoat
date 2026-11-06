@@ -1,3 +1,4 @@
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ static int contains_ci(const char *text, const char *needle)
     for (; *text; text++)
     {
         size_t i = 0;
+
         while (i < n && text[i] != '\0' &&
                tolower((unsigned char)text[i]) ==
                tolower((unsigned char)needle[i]))
@@ -50,7 +52,7 @@ static int contains_ci(const char *text, const char *needle)
 }
 
 /*
- * Page priority follows the locked PageGoat crawl order:
+ * Page priority follows the locked crawl order:
  * Contact -> About -> Leadership -> Investor Relations ->
  * Careers -> Products -> Media -> Blog -> Sitemap.
  */
@@ -104,6 +106,24 @@ static int classify_page(const char *text)
     return 0;
 }
 
+/* Convert the existing page priority into an activity description. */
+static const char *crawl_page_type(int priority)
+{
+    switch (priority)
+    {
+        case 1: return "Contact";
+        case 2: return "About";
+        case 3: return "Leadership";
+        case 4: return "Investor Relations";
+        case 5: return "Careers";
+        case 6: return "Products";
+        case 7: return "Media";
+        case 8: return "Blog";
+        case 9: return "Sitemap";
+        default: return "Website";
+    }
+}
+
 /* Reject linked files that cannot be useful HTML contact pages. */
 static int is_non_html_asset_url(const char *url)
 {
@@ -116,6 +136,7 @@ static int is_non_html_asset_url(const char *url)
         ".webm", ".webp", ".wmv", ".woff", ".woff2", ".xls",
         ".xlsx", ".zip"
     };
+
     const char *path_end;
     const char *last_slash;
     const char *last_dot;
@@ -124,10 +145,12 @@ static int is_non_html_asset_url(const char *url)
         return 1;
 
     path_end = strpbrk(url, "?#");
+
     if (path_end == NULL)
         path_end = url + strlen(url);
 
     last_slash = NULL;
+
     for (const char *p = url; p < path_end; p++)
     {
         if (*p == '/')
@@ -135,6 +158,7 @@ static int is_non_html_asset_url(const char *url)
     }
 
     last_dot = NULL;
+
     for (const char *p = last_slash != NULL ? last_slash + 1 : url;
          p < path_end; p++)
     {
@@ -146,30 +170,41 @@ static int is_non_html_asset_url(const char *url)
         return 0;
 
     for (size_t i = 0;
-         i < sizeof(blocked_extensions) / sizeof(blocked_extensions[0]); i++)
+         i < sizeof(blocked_extensions) / sizeof(blocked_extensions[0]);
+         i++)
     {
         size_t extension_length = strlen(blocked_extensions[i]);
+
         if ((size_t)(path_end - last_dot) == extension_length &&
-            curl_strnequal(last_dot, blocked_extensions[i], extension_length))
+            curl_strnequal(last_dot, blocked_extensions[i],
+                           extension_length))
             return 1;
     }
 
     return 0;
 }
 
-static int get_url_part(CURLU *url, CURLUPart part, char *out, size_t cap)
+static int get_url_part(
+    CURLU *url,
+    CURLUPart part,
+    char *out,
+    size_t cap)
 {
     char *value = NULL;
-    CURLUcode code = curl_url_get(url, part, &value, CURLU_DEFAULT_PORT);
+
+    CURLUcode code = curl_url_get(
+        url, part, &value, CURLU_DEFAULT_PORT);
 
     if (code != CURLUE_OK || value == NULL)
     {
         if (value != NULL)
             curl_free(value);
+
         return -1;
     }
 
     size_t n = strlen(value);
+
     if (n >= cap)
     {
         curl_free(value);
@@ -178,6 +213,7 @@ static int get_url_part(CURLU *url, CURLUPart part, char *out, size_t cap)
 
     memcpy(out, value, n + 1);
     curl_free(value);
+
     return 0;
 }
 
@@ -190,14 +226,22 @@ static int resolve_same_origin(
 {
     CURLU *base = NULL;
     CURLU *candidate = NULL;
-    char base_scheme[16], candidate_scheme[16];
-    char base_host[256], candidate_host[256];
-    char base_port[16], candidate_port[16];
+
+    char base_scheme[16];
+    char candidate_scheme[16];
+
+    char base_host[256];
+    char candidate_host[256];
+
+    char base_port[16];
+    char candidate_port[16];
+
     char *full_url = NULL;
     int ok = 0;
 
     if (base_url == NULL || href == NULL ||
-        href[0] == '\0' || resolved == NULL || resolved_size == 0)
+        href[0] == '\0' || resolved == NULL ||
+        resolved_size == 0)
         return -1;
 
     /* Ignore non-navigation links and mail/telephone links. */
@@ -258,8 +302,10 @@ static int resolve_same_origin(
 done:
     if (full_url != NULL)
         curl_free(full_url);
+
     if (base != NULL)
         curl_url_cleanup(base);
+
     if (candidate != NULL)
         curl_url_cleanup(candidate);
 
@@ -292,8 +338,10 @@ static void add_candidate(
         return;
 
     PGCrawlCandidate *item = &items[*count];
+
     snprintf(item->url, sizeof(item->url), "%s", url);
     item->priority = priority;
+
     (*count)++;
 }
 
@@ -310,18 +358,24 @@ static void collect_link_candidates(
     {
         const char *anchor = NULL;
         const char *tag_end;
+
         const char *href_attr = NULL;
-        const char *value_end;
+        const char *value_end = NULL;
+
         char href[PG_CRAWL_MAX_URL];
         char resolved[PG_CRAWL_MAX_URL];
         char context[1536];
-        size_t href_len, context_len;
+
+        size_t href_len;
+        size_t context_len;
+
         int priority;
 
         /* Find the next opening anchor tag, case-insensitively. */
         for (const char *q = p; *q; q++)
         {
-            if (q[0] == '<' && tolower((unsigned char)q[1]) == 'a' &&
+            if (q[0] == '<' &&
+                tolower((unsigned char)q[1]) == 'a' &&
                 (isspace((unsigned char)q[2]) || q[2] == '>'))
             {
                 anchor = q;
@@ -333,8 +387,16 @@ static void collect_link_candidates(
             break;
 
         tag_end = strchr(anchor, '>');
+
         if (tag_end == NULL)
             break;
+
+        /*
+         * Both pointers are reset for every anchor.
+         * An anchor without href must never reuse another anchor's href.
+         */
+        href_attr = NULL;
+        value_end = NULL;
 
         for (const char *q = anchor; q < tag_end; q++)
         {
@@ -346,20 +408,28 @@ static void collect_link_candidates(
                 tolower((unsigned char)q[3]) == 'f')
             {
                 const char *v = q + 4;
+
                 while (v < tag_end && isspace((unsigned char)*v))
                     v++;
+
                 if (v < tag_end && *v == '=')
                 {
                     v++;
+
                     while (v < tag_end && isspace((unsigned char)*v))
                         v++;
+
                     if (v < tag_end && (*v == '"' || *v == '\''))
                     {
                         char quote = *v++;
+
                         href_attr = v;
                         value_end = v;
-                        while (value_end < tag_end && *value_end != quote)
+
+                        while (value_end < tag_end &&
+                               *value_end != quote)
                             value_end++;
+
                         break;
                     }
                     else if (v < tag_end)
@@ -367,25 +437,29 @@ static void collect_link_candidates(
                         /* HTML also permits unquoted href values. */
                         href_attr = v;
                         value_end = v;
+
                         while (value_end < tag_end &&
                                !isspace((unsigned char)*value_end) &&
                                *value_end != '>')
                             value_end++;
+
                         break;
                     }
                 }
             }
         }
 
-        if (href_attr != NULL)
+        if (href_attr != NULL && value_end != NULL)
         {
             href_len = (size_t)(value_end - href_attr);
+
             if (href_len > 0 && href_len < sizeof(href))
             {
                 memcpy(href, href_attr, href_len);
                 href[href_len] = '\0';
 
                 const char *text_end = strstr(tag_end + 1, "</a");
+
                 context_len = text_end
                     ? (size_t)(text_end - (tag_end + 1))
                     : 0;
@@ -395,17 +469,31 @@ static void collect_link_candidates(
 
                 memcpy(context, href, href_len);
                 context[href_len] = ' ';
+
                 if (context_len > 0)
+                {
                     memcpy(context + href_len + 1,
-                           tag_end + 1, context_len);
+                           tag_end + 1,
+                           context_len);
+                }
+
                 context[href_len + 1 + context_len] = '\0';
 
                 priority = classify_page(context);
 
                 if (priority > 0 &&
-                    resolve_same_origin(base_url, href,
-                                        resolved, sizeof(resolved)) == 0)
-                    add_candidate(items, count, resolved, priority);
+                    resolve_same_origin(
+                        base_url,
+                        href,
+                        resolved,
+                        sizeof(resolved)) == 0)
+                {
+                    add_candidate(
+                        items,
+                        count,
+                        resolved,
+                        priority);
+                }
             }
         }
 
@@ -413,14 +501,17 @@ static void collect_link_candidates(
     }
 }
 
-static void sort_candidates(PGCrawlCandidate *items, size_t count)
+static void sort_candidates(
+    PGCrawlCandidate *items,
+    size_t count)
 {
     for (size_t i = 1; i < count; i++)
     {
         PGCrawlCandidate current = items[i];
         size_t j = i;
 
-        while (j > 0 && items[j - 1].priority > current.priority)
+        while (j > 0 &&
+               items[j - 1].priority > current.priority)
         {
             items[j] = items[j - 1];
             j--;
@@ -486,7 +577,8 @@ static int pg_json_string(
 
         v++;
 
-        while (v < end && *v != '"' && n + 1 < out_size)
+        while (v < end && *v != '"' &&
+               n + 1 < out_size)
         {
             if (*v == '\\' && v + 1 < end)
                 v++;
@@ -495,6 +587,7 @@ static int pg_json_string(
         }
 
         out[n] = '\0';
+
         return n > 0;
     }
 
@@ -539,7 +632,6 @@ static const char *pg_json_object_end(const char *start)
 
     return NULL;
 }
-
 
 /* Find the matching closing div, accounting for nested div elements. */
 static const char *pg_find_div_end(
@@ -598,7 +690,9 @@ static const char *pg_find_div_end(
             }
 
             end = memchr(
-                next_open, '>', (size_t)(limit - next_open));
+                next_open,
+                '>',
+                (size_t)(limit - next_open));
 
             if (end == NULL)
                 return NULL;
@@ -624,6 +718,7 @@ static int pg_visible_element_text(
     const char *tag_end;
     const char *close;
     const char *p;
+
     size_t used = 0;
     int pending_space = 0;
 
@@ -712,10 +807,13 @@ static void pg_extract_visible_team_cards(
         const char *tag_end;
         const char *card_end;
         const char *info;
+
         char tag[512];
         size_t tag_length;
+
         char name[PG_PERSON_NAME_SIZE] = "";
         char role[PG_PERSON_ROLE_SIZE] = "";
+
         int duplicate = 0;
 
         if (open == NULL || open >= html_end)
@@ -739,36 +837,32 @@ static void pg_extract_visible_team_cards(
 
         p = tag_end + 1;
 
-if (!contains_ci(tag, "team-card"))
-    continue;
+        if (!contains_ci(tag, "team-card"))
+            continue;
 
-card_end = pg_find_div_end(open, html_end);
+        card_end = pg_find_div_end(open, html_end);
 
-if (card_end == NULL)
-{
-
-    continue;
-}
+        if (card_end == NULL)
+            continue;
 
         info = strstr(tag_end + 1, "team-info");
 
         if (info == NULL || info >= card_end)
             continue;
 
-if (!pg_visible_element_text(
-        info, card_end, "<h4", "</h4>",
-        name, sizeof(name)))
-{
-    continue;
-}
+        if (!pg_visible_element_text(
+                info, card_end, "<h4", "</h4>",
+                name, sizeof(name)))
+        {
+            continue;
+        }
 
-if (!pg_visible_element_text(
-        info, card_end, "<span", "</span>",
-        role, sizeof(role)))
-{
-
-    continue;
-}
+        if (!pg_visible_element_text(
+                info, card_end, "<span", "</span>",
+                role, sizeof(role)))
+        {
+            continue;
+        }
 
         /* Avoid obvious testimonial/customer review containers. */
         {
@@ -796,6 +890,7 @@ if (!pg_visible_element_text(
 
             snprintf(person->name, sizeof(person->name), "%s", name);
             snprintf(person->role, sizeof(person->role), "%s", role);
+
             person->email[0] = '\0';
 
             snprintf(person->source_url, sizeof(person->source_url),
@@ -840,9 +935,10 @@ static int pg_is_json_ld_script(
     return contains_ci(tag, "application/ld+json");
 }
 
-
 /* Add a person only when a name and explicit role are available. */
-static void pg_extract_people(PGContext *ctx, const char *source_url)
+static void pg_extract_people(
+    PGContext *ctx,
+    const char *source_url)
 {
     const char *html;
     const char *script;
@@ -890,7 +986,9 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
                  tolower((unsigned char)close[5]) == 'i' &&
                  tolower((unsigned char)close[6]) == 'p' &&
                  tolower((unsigned char)close[7]) == 't'))
+        {
             close++;
+        }
 
         if (close + 8 > html_end)
             break;
@@ -906,11 +1004,13 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
                 const char *value = strchr(type, ':');
                 const char *object_start;
                 const char *object_end;
+
                 char person_type[64] = "";
                 char name[PG_PERSON_NAME_SIZE] = "";
                 char role[PG_PERSON_ROLE_SIZE] = "";
                 char email[256] = "";
                 char evidence[PG_PERSON_EVIDENCE_SIZE] = "";
+
                 int duplicate = 0;
 
                 if (value == NULL || value >= close)
@@ -935,7 +1035,9 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
 
                     while (value < close && *value != '"' &&
                            n + 1 < sizeof(person_type))
+                    {
                         person_type[n++] = *value++;
+                    }
 
                     person_type[n] = '\0';
                 }
@@ -965,10 +1067,12 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
                     continue;
                 }
 
-                if (!pg_json_string(object_start, object_end,
-                                    "name", name, sizeof(name)) ||
-                    !pg_json_string(object_start, object_end,
-                                    "jobTitle", role, sizeof(role)))
+                if (!pg_json_string(
+                        object_start, object_end,
+                        "name", name, sizeof(name)) ||
+                    !pg_json_string(
+                        object_start, object_end,
+                        "jobTitle", role, sizeof(role)))
                 {
                     type += 7;
                     continue;
@@ -997,11 +1101,14 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
                     snprintf(person->name, sizeof(person->name), "%s", name);
                     snprintf(person->role, sizeof(person->role), "%s", role);
                     snprintf(person->email, sizeof(person->email), "%s", email);
+
                     snprintf(person->source_url, sizeof(person->source_url),
                              "%s", source_url);
+
                     snprintf(evidence, sizeof(evidence),
                              "Schema.org Person: name=%s; jobTitle=%s",
                              name, role);
+
                     snprintf(person->evidence, sizeof(person->evidence),
                              "%s", evidence);
 
@@ -1022,8 +1129,10 @@ static void pg_extract_people(PGContext *ctx, const char *source_url)
 PGStatus pg_crawl_contact_pages(PGContext *ctx)
 {
     PGCrawlCandidate candidates[PG_CRAWL_MAX_CANDIDATES];
+
     size_t candidate_count = 0;
     size_t attempted = 0;
+
     PGHttpResponse homepage_response;
     const char *base_url;
 
@@ -1043,31 +1152,54 @@ PGStatus pg_crawl_contact_pages(PGContext *ctx)
     pg_extract_people(ctx, base_url);
 
     collect_link_candidates(
-        ctx->response.body, base_url, candidates, &candidate_count);
+        ctx->response.body,
+        base_url,
+        candidates,
+        &candidate_count);
 
     if (candidate_count == 0)
     {
-        pg_context_emit_event(ctx, "contact_discovery_empty",
-                              "No prioritized same-site contact links found.", base_url);
+        pg_context_emit_event(
+            ctx,
+            "contact_discovery_empty",
+            "No prioritized same-site contact links found.",
+            base_url);
+
         return PG_STATUS_OK;
     }
 
     {
         char message[160];
-        snprintf(message, sizeof(message),
-                 "Discovered %zu unique same-site page candidates.", candidate_count);
-        pg_context_emit_event(ctx, "contact_candidates_discovered", message, base_url);
+
+        snprintf(
+            message,
+            sizeof(message),
+            "Discovered %zu unique same-site page candidates.",
+            candidate_count);
+
+        pg_context_emit_event(
+            ctx,
+            "contact_candidates_discovered",
+            message,
+            base_url);
     }
 
     sort_candidates(candidates, candidate_count);
+
     homepage_response = ctx->response;
 
     for (size_t i = 0;
-         i < candidate_count && attempted < PG_CRAWL_MAX_CONTACT_PAGES;
+         i < candidate_count &&
+         attempted < PG_CRAWL_MAX_CONTACT_PAGES;
          i++)
     {
         PGHttpResponse page_response;
         PGStatus extract_status;
+
+        char page_url[PG_CRAWL_MAX_URL];
+        char message[192];
+
+        const char *page_type = crawl_page_type(candidates[i].priority);
 
         if (strcmp(candidates[i].url, base_url) == 0)
             continue;
@@ -1075,48 +1207,113 @@ PGStatus pg_crawl_contact_pages(PGContext *ctx)
         memset(&page_response, 0, sizeof(page_response));
 
         attempted++;
-        pg_context_emit_event(ctx, "contact_page_fetch_started",
-                              "Fetching a prioritized same-site page.",
-                              candidates[i].url);
+
+        snprintf(
+            message,
+            sizeof(message),
+            "Fetching the prioritized same-site %s page.",
+            page_type);
+
+        pg_context_emit_event(
+            ctx,
+            "contact_page_fetch_started",
+            message,
+            candidates[i].url);
 
         if (pg_http_get(candidates[i].url, &page_response) != 0)
         {
-            pg_context_emit_event(ctx, "contact_page_fetch_failed",
-                                  "Could not download the candidate page.",
-                                  candidates[i].url);
+            snprintf(
+                message,
+                sizeof(message),
+                "Could not fetch the same-site %s page. Continuing extraction.",
+                page_type);
+
+            pg_context_emit_event(
+                ctx,
+                "contact_page_fetch_failed",
+                message,
+                candidates[i].url);
+
             pg_http_free(&page_response);
             continue;
         }
 
-        if (page_response.status < 200 || page_response.status >= 400 ||
+        if (page_response.status < 200 ||
+            page_response.status >= 400 ||
             page_response.body == NULL)
         {
-            pg_context_emit_event(ctx, "contact_page_fetch_failed",
-                                  "Candidate page returned an unsuccessful HTTP status.",
-                                  page_response.final_url[0] ? page_response.final_url : candidates[i].url);
+            snprintf(
+                message,
+                sizeof(message),
+                "The same-site %s page returned an unsuccessful HTTP response.",
+                page_type);
+
+            pg_context_emit_event(
+                ctx,
+                "contact_page_fetch_failed",
+                message,
+                page_response.final_url[0]
+                    ? page_response.final_url
+                    : candidates[i].url);
+
             pg_http_free(&page_response);
             continue;
         }
 
-        ctx->response = page_response;
-
-        pg_extract_people(
-            ctx,
-            page_response.final_url[0] != '\0'
+        /*
+         * Keep the resolved page URL in a separate buffer.
+         * This remains valid after the response body is freed.
+         */
+        snprintf(
+            page_url,
+            sizeof(page_url),
+            "%s",
+            page_response.final_url[0]
                 ? page_response.final_url
                 : candidates[i].url);
 
+        ctx->response = page_response;
+
+        pg_extract_people(ctx, page_url);
+
         extract_status = pg_extract_contact(ctx);
+
         (void)pg_extract_social(ctx);
 
+        /*
+         * Release the candidate response and restore the original
+         * homepage response. The homepage remains owned by the caller.
+         */
         pg_http_free(&ctx->response);
         ctx->response = homepage_response;
 
         if (extract_status == PG_STATUS_OK)
         {
-            pg_context_emit_event(ctx, "contact_page_scanned",
-                                  "Scanned a prioritized same-site contact page.",
-                                  page_response.final_url[0] ? page_response.final_url : candidates[i].url);
+            snprintf(
+                message,
+                sizeof(message),
+                "Scanned the same-site %s page.",
+                page_type);
+
+            pg_context_emit_event(
+                ctx,
+                "contact_page_scanned",
+                message,
+                page_url);
+        }
+        else
+        {
+            snprintf(
+                message,
+                sizeof(message),
+                "Scanned the same-site %s page; contact extraction returned a warning.",
+                page_type);
+
+            pg_context_emit_event(
+                ctx,
+                "contact_page_scanned",
+                message,
+                page_url);
         }
     }
 

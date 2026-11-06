@@ -21,7 +21,7 @@ export default function AboutPage() {
       <article className="info-content">
         <p className="eyebrow">WELOOKIT / ABOUT</p>
 
-        <h1>The web has the answers. <br/> Finding it is the work.</h1>
+        <h1>The web has the answers. Finding it is the work.</h1>
 
         <p className="info-intro">
           Welookit started as a hobby project with a simple idea: looking up a company should not mean opening 30 multiple tabs to find information that is already out there.
@@ -41,17 +41,17 @@ export default function AboutPage() {
           <p>
             I started wondering whether that repetitive work could be handled by a small, purpose-built programme instead.
             Something straightforward to use on the outside, with the machines doing the hard work underneath.
-            Yes, you can also do it with AI. Good luck with that, Mr Datasaurus!
+            Yes, you can also do it with AI. Good luck with that!
           </p>
           <p>
             That experiment became the core thought behind {" "}
             <a href="/" aria-label="Welookit homepage">
-            <span>welookit.com</span>
+            <span>welookit.com</span>.
             </a>
           </p>
           <p>
-            I was using this as a CLI tool for my own research in my internal projects,
-            that&apos;s when my colleagues started asking for its link
+            I was using this as a tool for my own research in my internal projects,
+            that&apos;s when my colleagues started asking for its link.
           </p>
         </section>
 

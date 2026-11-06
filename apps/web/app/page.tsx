@@ -4,7 +4,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  Activity,
   ChevronDown,
   ChevronUp,
   ArrowUpRight,
@@ -15,9 +14,7 @@ import {
   Menu,
   Search,
   X,
-  Target,
   Galaxy,
-  User,
   CircleUserRound,
   GlobeCheck,
 } from "lucide-react";
@@ -130,7 +127,7 @@ async function readSseResponse(
 }
 
 const TABS: Tab[] = ["Overview", "Contacts", "Website & social", "Technology"];
-const EXAMPLES = ["Tatapower", "Siemens", "Accenture", "Dentsu"];
+const EXAMPLES = ["HCLTech", "Siemens", "Accenture", "Dentsu"];
 const RECENTS_KEY = "welookit-recent-searches";
 
 function isRecord(value: unknown): value is RecordValue {
@@ -973,17 +970,9 @@ export default function HomePage() {
                 <span className="technology-note-label">UNDER THE HOOD</span>
                   <span className="technology-note-copy">
                     Powered by a proprietary C-based extraction engine, welookit combines
-                    open-source software, cloud computing, network infrastructure and
-                    modern web technologies to discover, process and organise company
-                    intelligence in one place. This website uses{" "}
-                    <a
-                      href="https://www.cloudflare.com/products/tunnel/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Cloudflare Tunnel
-                    </a>{" "}
-                    for seamless engine connectivity and security.
+                    open-source software, cloud computing, virtual network infrastructure 
+                    and modern web technologies to find, process and organise publicly available company
+                    intelligence or web page data in one place.
                   </span>
               </p>
             </div>

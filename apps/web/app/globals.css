@@ -139,7 +139,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .hero-mark {
   width: 64px;
   height: 64px;
-  margin: 0 auto 24px;
+  margin: 0 auto 48px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -166,8 +166,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   margin: 0;
   color: var(--ink);
   font-family: Georgia, serif;
-  font-size: clamp(40px, 6vw, 58px);
-  font-weight: 500;
+  font-size: clamp(40px, 6vw, 48px);
+  font-weight: 400;
   letter-spacing: -2.8px;
   line-height: 1.08;
   z-index: 1;
@@ -175,11 +175,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .hero-copy {
   margin: 14px 0 30px;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 .search-form {
   width: 100%;
-  min-height: 58px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   border: 1px solid var(--line-strong);
@@ -196,7 +196,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .search-form input {
   width: 100%;
   min-width: 0;
-  height: 56px;
+  height: 52px;
   padding: 0 14px;
   border: 0;
   outline: none;
@@ -321,7 +321,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .technology-note-label {
   color: var(--soft);
   font-family: var(--font-mono, monospace);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 1.2px;
 }
@@ -652,7 +652,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width: 480px) {
   .site-shell { width: calc(100% - 28px); }
   .wordmark { font-size: 18px; }
-  .brand-icon svg { width: 17px; }
+  .brand-icon svg { width: 20px; }
   .header-menu-button { width: 37px; height: 37px; }
   .header-search { margin-left: 0; height: 39px; }
   .header-search input { padding: 0 8px; font-size: 12px; }

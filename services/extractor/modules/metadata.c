@@ -1,6 +1,9 @@
+
+#include <stdlib.h>
 #include <string.h>
 
 #include "pagegoat/services/extractor/modules/metadata.h"
+#include "pagegoat/services/normalize/normalize.h"
 
 static void copy_between(
     const char *start,
@@ -8,33 +11,94 @@ static void copy_between(
     char *output,
     size_t size)
 {
-    size_t len = (size_t)(end - start);
+    size_t len;
+
+    if (start == NULL ||
+        end == NULL ||
+        output == NULL ||
+        size == 0 ||
+        end < start)
+    {
+        return;
+    }
+
+    len = (size_t)(end - start);
 
     if (len >= size)
         len = size - 1;
 
     memcpy(output, start, len);
-
     output[len] = '\0';
+}
+
+/*
+ * Copy an HTML value and decode its entities.
+ *
+ * A temporary buffer ensures the decoder receives
+ * separate input and output buffers.
+ */
+static void copy_decoded_between(
+    const char *start,
+    const char *end,
+    char *output,
+    size_t size)
+{
+    size_t len;
+    char *raw;
+
+    if (start == NULL ||
+        end == NULL ||
+        output == NULL ||
+        size == 0 ||
+        end < start)
+    {
+        return;
+    }
+
+    output[0] = '\0';
+
+    len = (size_t)(end - start);
+
+    if (len >= size)
+        len = size - 1;
+
+    raw = (char *)malloc(len + 1);
+
+    if (raw == NULL)
+    {
+        copy_between(start, end, output, size);
+        return;
+    }
+
+    memcpy(raw, start, len);
+    raw[len] = '\0';
+
+    /*
+     * If decoding encounters an output-size warning,
+     * the decoder leaves a null-terminated partial result.
+     */
+    pg_decode_html_entities(raw, output, size);
+
+    free(raw);
 }
 
 static void extract_title(PGContext *ctx)
 {
     const char *html = ctx->response.body;
 
-    char *a = strstr((char *)html, "<title>");
+    const char *a = strstr(html, "<title>");
 
     if (a == NULL)
         return;
 
     a += 7;
 
-    char *b = strstr(a, "</title>");
+    const char *b = strstr(a, "</title>");
 
     if (b == NULL)
         return;
 
-    copy_between(
+    copy_decoded_between(
         a,
         b,
         ctx->company.title,
@@ -47,24 +111,24 @@ static void extract_meta(
     char *output,
     size_t size)
 {
-    char *m = strstr((char *)html, needle);
+    const char *m = strstr(html, needle);
 
     if (m == NULL)
         return;
 
-    char *c = strstr(m, "content=\"");
+    const char *c = strstr(m, "content=\"");
 
     if (c == NULL)
         return;
 
     c += 9;
 
-    char *e = strchr(c, '"');
+    const char *e = strchr(c, '"');
 
     if (e == NULL)
         return;
 
-    copy_between(
+    copy_decoded_between(
         c,
         e,
         output,
@@ -75,24 +139,24 @@ static void extract_language(PGContext *ctx)
 {
     const char *html = ctx->response.body;
 
-    char *h = strstr((char *)html, "<html");
+    const char *h = strstr(html, "<html");
 
     if (h == NULL)
         return;
 
-    char *l = strstr(h, "lang=\"");
+    const char *l = strstr(h, "lang=\"");
 
     if (l == NULL)
         return;
 
     l += 6;
 
-    char *e = strchr(l, '"');
+    const char *e = strchr(l, '"');
 
     if (e == NULL)
         return;
 
-    copy_between(
+    copy_decoded_between(
         l,
         e,
         ctx->company.language,
@@ -103,24 +167,24 @@ static void extract_canonical(PGContext *ctx)
 {
     const char *html = ctx->response.body;
 
-    char *l = strstr((char *)html, "rel=\"canonical\"");
+    const char *l = strstr(html, "rel=\"canonical\"");
 
     if (l == NULL)
         return;
 
-    char *h = strstr(l, "href=\"");
+    const char *h = strstr(l, "href=\"");
 
     if (h == NULL)
         return;
 
     h += 6;
 
-    char *e = strchr(h, '"');
+    const char *e = strchr(h, '"');
 
     if (e == NULL)
         return;
 
-    copy_between(
+    copy_decoded_between(
         h,
         e,
         ctx->company.canonical,
